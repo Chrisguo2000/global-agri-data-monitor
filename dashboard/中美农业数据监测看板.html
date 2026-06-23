@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>中美农业数据监测看板</title>
-<script src="data/dashboard-data.js"></script>
+<script id="dashboard-data-json" type="application/json"></script>
 <style>
   :root {
     --bg: #f4f5f7;
@@ -455,7 +455,12 @@
 
 <script>
 (() => {
-  const data = window.CHINA_US_AGRI_DASHBOARD_DATA;
+  const embeddedData = document.getElementById("dashboard-data-json")?.textContent?.trim();
+  const data = window.CHINA_US_AGRI_DASHBOARD_DATA || (embeddedData ? JSON.parse(embeddedData) : null);
+  if (!data) {
+    document.body.innerHTML = '<div class="app"><section class="panel empty-state">缺少看板数据文件，请使用自动任务生成的看板 zip。</section></div>';
+    return;
+  }
   const metricsById = Object.fromEntries(data.metrics.map(metric => [metric.id, metric]));
   const productsById = Object.fromEntries(data.products.map(product => [product.id, product]));
   const params = new URLSearchParams(window.location.search);

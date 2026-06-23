@@ -83,13 +83,13 @@ jobs:
           python scripts/build_china_us_agri_dashboard_data.py \
             --moa-json dist/moa/moa_jcyj_data_merged.json \
             --usda-csv "$USDA_CSV" \
-            --output dist/dashboard/data/dashboard-data.js
+            --output dist/dashboard/data/dashboard-data.json
 
       - name: 打包中美合并看板
         run: |
           python scripts/prepare_china_us_dashboard.py \
             --template dashboard/中美农业数据监测看板.html \
-            --data dist/dashboard/data/dashboard-data.js \
+            --data dist/dashboard/data/dashboard-data.json \
             --output-dir dist/dashboard \
             --zip-name 中美农业数据监测看板.zip
 
@@ -135,8 +135,8 @@ jobs:
         run: |
           python scripts/send_email.py \
             --subject "中美农业数据自动周报" \
-            --body "您好，附件为本周自动生成的中美农业数据周报：1) USDA Excel；2) 农业农村部 Excel；3) 中美合并看板 zip；4) 看板所用 dashboard-data.js。看板 zip 解压后直接打开 HTML 即可，不需要手动上传数据文件。" \
-            --attachments "$USDA_XLSX" "$MOA_XLSX" "dist/中美农业数据监测看板.zip" "dist/dashboard/data/dashboard-data.js"
+            --body "您好，附件为本周自动生成的中美农业数据周报：1) USDA Excel；2) 农业农村部 Excel；3) 中美合并看板 zip；4) 看板所用 dashboard-data.json。看板 zip 解压后直接打开 HTML 即可，不需要手动上传数据文件。" \
+            --attachments "$USDA_XLSX" "$MOA_XLSX" "dist/中美农业数据监测看板.zip" "dist/dashboard/data/dashboard-data.json"
 
       - name: 上传运行产物
         if: always()
@@ -148,6 +148,6 @@ jobs:
             data/USDA农业数据_*_合并长表.csv
             dist/*.xlsx
             dist/*.zip
-            dist/dashboard/data/dashboard-data.js
+            dist/dashboard/data/dashboard-data.json
             dist/moa/moa_jcyj_data.json
             dist/moa/moa_jcyj_data_merged.json

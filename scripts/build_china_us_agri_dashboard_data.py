@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MOA_BUILD_SCRIPT = ROOT / "scripts/build_moa_workbook.py"
-DEFAULT_OUTPUT = ROOT / "dist/dashboard/data/dashboard-data.js"
+DEFAULT_OUTPUT = ROOT / "dist/dashboard/data/dashboard-data.json"
 MAX_POINTS = 260
 
 MOA_INPUT_PATTERNS = [
@@ -352,7 +352,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="生成中美农业数据看板的数据文件")
     parser.add_argument("--moa-json", help="农业部本周合并后的 JSON；不传则自动找最新可用文件")
     parser.add_argument("--usda-csv", help="USDA 本周合并长表 CSV；不传则自动找最新可用文件")
-    parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 dashboard-data.js")
+    parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 dashboard-data.json")
     return parser.parse_args()
 
 
@@ -409,9 +409,13 @@ def main():
     }
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    text = "window.CHINA_US_AGRI_DASHBOARD_DATA = "
-    text += json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    text += ";\n"
+    if output.suffix.lower() == ".js":
+        text = "window.CHINA_US_AGRI_DASHBOARD_DATA = "
+        text += json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        text += ";\n"
+    else:
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        text += "\n"
     output.write_text(text, encoding="utf-8")
     print(json.dumps({
         "output": str(output),

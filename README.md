@@ -5,7 +5,7 @@
 - USDA NASS 农业数据 Excel
 - 农业农村部监测预警 Excel
 - 中美农业数据合并看板 zip
-- 看板所用 `dashboard-data.js`
+- 看板所用 `dashboard-data.json`
 
 看板 zip 解压后直接打开 `中美农业数据监测看板.html`，不需要手动上传 Excel 或数据文件。
 
@@ -63,7 +63,7 @@ data/moa/baseline_moa_jcyj_data.json
 USDA农业数据_YYYY-MM-DD_HHMM.xlsx
 农业农村部监测预警数据汇总_YYYYMMDD_清洗版.xlsx
 中美农业数据监测看板.zip
-dashboard-data.js
+dashboard-data.json
 ```
 
 ## 本地测试
@@ -90,11 +90,11 @@ USDA_CSV="$(ls -1t data/USDA农业数据_*_合并长表.csv | head -n 1)"
 python scripts/build_china_us_agri_dashboard_data.py \
   --moa-json dist/moa/moa_jcyj_data_merged.json \
   --usda-csv "$USDA_CSV" \
-  --output dist/dashboard/data/dashboard-data.js
+  --output dist/dashboard/data/dashboard-data.json
 
 python scripts/prepare_china_us_dashboard.py \
   --template dashboard/中美农业数据监测看板.html \
-  --data dist/dashboard/data/dashboard-data.js \
+  --data dist/dashboard/data/dashboard-data.json \
   --output-dir dist/dashboard \
   --zip-name 中美农业数据监测看板.zip
 ```
