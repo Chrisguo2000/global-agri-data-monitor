@@ -1,13 +1,13 @@
-# 中美农业数据自动周报
+# 各国农业数据自动周报
 
 这个仓库每周一自动生成并邮件发送：
 
 - USDA NASS 农业数据 Excel
 - 农业农村部监测预警 Excel
-- 中美农业数据合并看板 zip
+- 各国农业数据合并看板 zip
 - 看板所用 `dashboard-data.json`
 
-看板 zip 解压后直接打开 `中美农业数据监测看板.html`，不需要手动上传 Excel 或数据文件。
+看板 zip 解压后直接打开 `各国农业数据监测看板.html`，不需要手动上传 Excel 或数据文件。
 
 ## 自动运行频率
 
@@ -51,10 +51,11 @@ data/USDA农业数据_YYYY-MM-DD_HHMM_合并长表.csv
 data/raw/*.csv
 ```
 
-农业农村部历史基线会写入：
+农业农村部历史基线和澳洲本地长表会写入：
 
 ```text
 data/moa/baseline_moa_jcyj_data.json
+data/澳洲农业数据_YYYY-MM-DD_HHMM_合并长表.csv
 ```
 
 每周邮件附件包含：
@@ -62,7 +63,7 @@ data/moa/baseline_moa_jcyj_data.json
 ```text
 USDA农业数据_YYYY-MM-DD_HHMM.xlsx
 农业农村部监测预警数据汇总_YYYYMMDD_清洗版.xlsx
-中美农业数据监测看板.zip
+各国农业数据监测看板.zip
 dashboard-data.json
 ```
 
@@ -96,11 +97,12 @@ python scripts/prepare_china_us_dashboard.py \
   --template dashboard/中美农业数据监测看板.html \
   --data dist/dashboard/data/dashboard-data.json \
   --output-dir dist/dashboard \
-  --zip-name 中美农业数据监测看板.zip
+  --zip-name 各国农业数据监测看板.zip
 ```
 
 ## 数据来源口径
 
 - 中国：农业农村部畜牧兽医局监测预警，周度数据。
 - 美国：USDA NASS Quick Stats，月度 Price Received 数据。
-- 中美对比统一换算为元/kg，但不同国家的数据频率、采集环节和商品口径不同，看板中会标注可比性提示。
+- 澳洲：MLA/NLRS、Australian Pork/ProFarmer、ABS CPI 与 ABS Livestock Products 等本地抓取后的公开数据。
+- 单国视图保留各自原始单位；各国对比只展示同商品、同价格口径可进入比较的国家，并统一换算为元/kg。

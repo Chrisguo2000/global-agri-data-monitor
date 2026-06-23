@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>中美农业数据监测看板</title>
+<title>各国农业数据监测看板</title>
 <script id="dashboard-data-json" type="application/json"></script>
 <style>
   :root {
@@ -16,6 +16,7 @@
     --soft: #eef1f5;
     --china: #b53d45;
     --us: #1f6f8b;
+    --au: #2b7a58;
     --accent: #a66f2a;
     --good: #2b7a58;
     --bad: #c2413a;
@@ -96,7 +97,7 @@
   }
   .country-switch {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
     margin: 10px 0 14px;
   }
@@ -135,6 +136,7 @@
   }
   .country-btn[data-mode="china"] .country-dot { background: var(--china); }
   .country-btn[data-mode="us"] .country-dot { background: var(--us); }
+  .country-btn[data-mode="au"] .country-dot { background: var(--au); }
   .country-btn[data-mode="compare"] .country-dot { background: var(--accent); }
   .product-strip {
     display: flex;
@@ -316,7 +318,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 840px;
+    min-width: 980px;
     background: var(--surface);
   }
   th, td {
@@ -332,6 +334,10 @@
     font-weight: 720;
   }
   tbody tr:hover { background: #f7f9fb; }
+  .muted {
+    color: var(--muted);
+    font-size: 12px;
+  }
   .tag {
     display: inline-flex;
     align-items: center;
@@ -344,6 +350,7 @@
   }
   .tag.china { background: #f7e8ea; color: var(--china); }
   .tag.us { background: #e8f1f6; color: var(--us); }
+  .tag.au { background: #e7f2ed; color: var(--au); }
   .tag.warn { background: #fff4dc; color: var(--warn); }
   .empty-state {
     height: 100%;
@@ -377,13 +384,14 @@
     <div class="brand">
       <div class="mark">AG</div>
       <div>
-        <h1 class="title">中美农业数据监测看板</h1>
-        <div class="subtitle" id="subtitle">中国农业部周度数据与 USDA 月度数据统一监测</div>
+        <h1 class="title">各国农业数据监测看板</h1>
+        <div class="subtitle" id="subtitle">中国农业部、USDA 与澳洲公开农业数据统一监测</div>
       </div>
     </div>
     <div class="toolbar">
       <div class="chip" id="chinaDate">中国数据</div>
       <div class="chip" id="usDate">美国数据</div>
+      <div class="chip" id="auDate">澳洲数据</div>
       <div class="chip" id="metricCount">指标</div>
     </div>
   </header>
@@ -397,8 +405,12 @@
       <span><strong>美国</strong><span>USDA NASS Quick Stats</span></span>
       <i class="country-dot"></i>
     </button>
+    <button class="country-btn" data-mode="au">
+      <span><strong>澳洲</strong><span>MLA / ABS / APL</span></span>
+      <i class="country-dot"></i>
+    </button>
     <button class="country-btn" data-mode="compare">
-      <span><strong>中美对比</strong><span>统一元/kg口径观察</span></span>
+      <span><strong>各国对比</strong><span>统一口径优先观察</span></span>
       <i class="country-dot"></i>
     </button>
   </nav>
@@ -412,7 +424,7 @@
           <h2 class="panel-title" id="mainTitle">核心指标</h2>
           <div class="panel-kicker" id="mainKicker">按当前视图展示最近有效价格</div>
         </div>
-        <span class="tag" id="viewTag">中美对比</span>
+        <span class="tag" id="viewTag">各国对比</span>
       </div>
       <div class="cards" id="metricCards"></div>
       <div class="chart-box" id="chartBox"></div>
@@ -466,15 +478,18 @@
   }
   const metricsById = Object.fromEntries(data.metrics.map(metric => [metric.id, metric]));
   const productsById = Object.fromEntries(data.products.map(product => [product.id, product]));
+  const countryOrder = data.meta?.countryOrder || Object.keys(data.countries || {});
   const params = new URLSearchParams(window.location.search);
   const state = {
     mode: params.get("view") || "compare",
     product: params.get("product") || "hog",
+    metric: params.get("metric") || "",
   };
 
   const colors = {
     china: getCss("--china"),
     us: getCss("--us"),
+    au: getCss("--au"),
     compare: getCss("--accent"),
     text: getCss("--text"),
     muted: getCss("--muted"),
@@ -487,6 +502,7 @@
 
   function setUrl() {
     const next = new URLSearchParams({ view: state.mode, product: state.product });
+    if (state.metric && state.mode !== "compare") next.set("metric", state.metric);
     history.replaceState(null, "", `${location.pathname}?${next.toString()}`);
   }
 
@@ -503,22 +519,83 @@
   }
 
   function metricFor(product, country) {
-    const key = country === "china" ? product.chinaMetric : product.usMetric;
+    const key = product.countryMetrics?.[country]
+      || (country === "china" ? product.chinaMetric : country === "us" ? product.usMetric : product[`${country}Metric`]);
     return metricsById[key];
   }
 
+  function metricsForProductCountry(productId, country) {
+    return data.metrics
+      .filter(metric => metric.country === country && metric.productId === productId && latest(metric))
+      .sort((a, b) => {
+        const primary = metricFor(productsById[productId] || {}, country)?.id;
+        if (a.id === primary) return -1;
+        if (b.id === primary) return 1;
+        return a.label.localeCompare(b.label, "zh-CN");
+      });
+  }
+
+  function selectedMetric() {
+    if (state.mode === "compare") return null;
+    const item = product();
+    const valid = metricsForProductCountry(item.id, state.mode);
+    const selected = valid.find(metric => metric.id === state.metric);
+    return selected || metricFor(item, state.mode) || valid[0] || null;
+  }
+
+  function selectProduct(productId) {
+    state.product = productId;
+    state.metric = "";
+  }
+
   function modeLabel() {
-    if (state.mode === "china") return "中国";
-    if (state.mode === "us") return "美国";
-    return "中美对比";
+    if (state.mode === "compare") return "各国对比";
+    return data.countries[state.mode]?.label || state.mode;
+  }
+
+  function countryLabel(country) {
+    return data.countries[country]?.label || country;
+  }
+
+  function countryValueText(value) {
+    if (!value) return "—";
+    return `${fmt(value.value, 2)} ${value.unit || ""}`;
+  }
+
+  function comparisonFor(productId) {
+    return data.comparisons.find(row => row.productId === productId);
   }
 
   function product() {
     return productsById[state.product] || data.products[0];
   }
 
+  function visibleProducts() {
+    if (state.mode === "compare") {
+      return data.products.filter(item => comparisonFor(item.id));
+    }
+    return data.products.filter(item => metricsForProductCountry(item.id, state.mode).length);
+  }
+
+  function ensureState() {
+    const products = visibleProducts();
+    if (products.length && !products.some(item => item.id === state.product)) {
+      selectProduct(products[0].id);
+    }
+    if (state.mode !== "compare") {
+      const metric = selectedMetric();
+      if (metric && state.metric && metric.id !== state.metric) state.metric = metric.id;
+    }
+  }
+
   function validSeries(metric) {
     return (metric?.series || []).filter(row => row.value !== null && row.value !== undefined);
+  }
+
+  function validCompareSeries(metric) {
+    return (metric?.series || [])
+      .filter(row => row.compareValue !== null && row.compareValue !== undefined)
+      .map(row => ({ ...row, value: row.compareValue }));
   }
 
   function latest(metric) {
@@ -528,17 +605,18 @@
   function renderShell() {
     document.getElementById("chinaDate").textContent = `中国 ${data.countries.china.latestDate || "—"}`;
     document.getElementById("usDate").textContent = `美国 ${data.countries.us.latestDate || "—"}`;
+    document.getElementById("auDate").textContent = `澳洲 ${data.countries.au?.latestDate || "—"}`;
     document.getElementById("metricCount").textContent = `${data.metrics.length} 个指标`;
     document.querySelectorAll(".country-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.mode === state.mode);
     });
     const strip = document.getElementById("productStrip");
-    strip.innerHTML = data.products.map(item => (
+    strip.innerHTML = visibleProducts().map(item => (
       `<button class="product-btn ${item.id === state.product ? "active" : ""}" data-product="${item.id}">${item.label}</button>`
     )).join("");
     strip.querySelectorAll(".product-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        state.product = btn.dataset.product;
+        selectProduct(btn.dataset.product);
         render();
       });
     });
@@ -548,26 +626,30 @@
     const cards = [];
     if (state.mode === "compare") {
       for (const item of data.products) {
-        const comparison = data.comparisons.find(row => row.productId === item.id);
+        const comparison = comparisonFor(item.id);
         if (!comparison) continue;
+        const sub = countryOrder
+          .filter(country => comparison.countryValues?.[country])
+          .map(country => `${countryLabel(country)} ${countryValueText(comparison.countryValues[country])}`)
+          .join(" / ");
         cards.push({
           id: item.id,
           name: item.label,
           source: comparison.comparability,
           value: comparison.ratio,
-          unit: "倍",
-          sub: `中国 ${fmt(comparison.chinaValue, 2)} / 美国 ${fmt(comparison.usValue, 2)}`,
+          unit: comparison.ratio === null || comparison.ratio === undefined ? "" : "倍",
+          sub: sub || "暂无可比值",
           mom: null,
           yoy: null,
         });
       }
     } else {
-      for (const item of data.products) {
-        const metric = metricFor(item, state.mode);
+      const currentMetric = selectedMetric();
+      for (const metric of metricsForProductCountry(state.product, state.mode)) {
         const row = latest(metric);
-        if (!metric || !row) continue;
         cards.push({
-          id: item.id,
+          id: metric.id,
+          productId: metric.productId,
           name: metric.label,
           source: metric.frequency,
           value: row.value,
@@ -575,11 +657,12 @@
           sub: row.date,
           mom: row.momPct,
           yoy: row.yoyPct,
+          selected: currentMetric?.id === metric.id,
         });
       }
     }
-    document.getElementById("metricCards").innerHTML = cards.map(card => `
-      <article class="metric-card ${card.id === state.product ? "selected" : ""}" data-product="${card.id}">
+    document.getElementById("metricCards").innerHTML = cards.length ? cards.map(card => `
+      <article class="metric-card ${state.mode === "compare" ? (card.id === state.product ? "selected" : "") : (card.selected ? "selected" : "")}" data-product="${card.productId || card.id}" data-metric="${card.productId ? card.id : ""}">
         <div class="card-top">
           <div class="card-name">${card.name}</div>
           <div class="card-source">${card.source}</div>
@@ -591,10 +674,11 @@
           ${card.yoy === null || card.yoy === undefined ? "" : fmtPct(card.yoy).replace("变化", "同比")}
         </div>
       </article>
-    `).join("");
+    `).join("") : `<div class="empty-state">当前品类暂无${modeLabel()}可展示指标</div>`;
     document.querySelectorAll(".metric-card").forEach(card => {
       card.addEventListener("click", () => {
         state.product = card.dataset.product;
+        state.metric = card.dataset.metric || "";
         render();
       });
     });
@@ -602,15 +686,24 @@
 
   function makeChartSeries() {
     const item = product();
-    if (state.mode === "china" || state.mode === "us") {
-      const metric = metricFor(item, state.mode);
+    if (state.mode !== "compare") {
+      const metric = selectedMetric();
       return metric ? [{ name: metric.label, country: state.mode, metric, rows: validSeries(metric) }] : [];
     }
-    const china = metricFor(item, "china");
-    const us = metricFor(item, "us");
+    const comparison = comparisonFor(item.id);
+    if (!comparison) return [];
     const result = [];
-    if (china) result.push({ name: "中国", country: "china", metric: china, rows: validSeries(china) });
-    if (us) result.push({ name: "美国", country: "us", metric: us, rows: validSeries(us) });
+    for (const country of comparison.countries || []) {
+      const metric = metricsById[comparison.countryValues?.[country]?.metric];
+      if (metric) {
+        result.push({
+          name: countryLabel(country),
+          country,
+          metric: { ...metric, unit: comparison.unit || metric.compareUnit || metric.unit },
+          rows: validCompareSeries(metric),
+        });
+      }
+    }
     return result;
   }
 
@@ -618,7 +711,7 @@
     const box = document.getElementById("chartBox");
     const series = makeChartSeries().filter(item => item.rows.length);
     if (!series.length) {
-      box.innerHTML = `<div class="empty-state">暂无可绘制数据</div>`;
+      box.innerHTML = `<div class="empty-state">${state.mode === "compare" ? "当前品类暂无两个及以上可比国家" : "暂无可绘制数据"}</div>`;
       return;
     }
     const width = box.clientWidth || 960;
@@ -674,30 +767,35 @@
         <line x1="${margin.left}" x2="${width - margin.right}" y1="${height - margin.bottom}" y2="${height - margin.bottom}" stroke="#bcc5d3"></line>
         <line x1="${margin.left}" x2="${margin.left}" y1="${margin.top}" y2="${height - margin.bottom}" stroke="#bcc5d3"></line>
         ${paths}
-        <text x="${margin.left}" y="20" fill="${colors.text}" font-size="13" font-weight="700">${product().label} 价格走势</text>
-        <text x="${width - margin.right}" y="20" text-anchor="end" fill="${colors.muted}" font-size="12">元/kg</text>
+        <text x="${margin.left}" y="20" fill="${colors.text}" font-size="13" font-weight="700">${product().label} 趋势</text>
+        <text x="${width - margin.right}" y="20" text-anchor="end" fill="${colors.muted}" font-size="12">${series[0]?.metric?.unit || ""}</text>
       </svg>
     `;
   }
 
   function renderDetails() {
     const item = product();
-    const comparison = data.comparisons.find(row => row.productId === item.id);
+    const comparison = comparisonFor(item.id);
     const detail = [];
     if (state.mode === "compare" && comparison) {
       detail.push(["品类", item.label]);
-      detail.push(["中国最新", `${fmt(comparison.chinaValue, 2)} 元/kg (${comparison.chinaDate})`]);
-      detail.push(["美国最新", `${fmt(comparison.usValue, 2)} 元/kg (${comparison.usDate})`]);
-      detail.push(["价比", comparison.ratio === null ? "—" : `${fmt(comparison.ratio, 2)} 倍`]);
+      for (const country of countryOrder) {
+        const value = comparison.countryValues?.[country];
+        if (value) detail.push([`${countryLabel(country)}最新`, `${countryValueText(value)} (${value.date})`]);
+      }
+      detail.push(["最高/最低", comparison.ratio === null ? "单位不同，不计算" : `${fmt(comparison.ratio, 2)} 倍`]);
       detail.push(["可比性", comparison.comparability]);
     } else {
-      const metric = metricFor(item, state.mode);
+      const metric = selectedMetric();
       const row = latest(metric);
       detail.push(["指标", metric?.label || item.label]);
       detail.push(["最新值", row ? `${fmt(row.value, 2)} ${metric.unit}` : "—"]);
       detail.push(["日期", row?.date || "—"]);
       detail.push(["频率", metric?.frequency || "—"]);
       detail.push(["来源", metric?.source || "—"]);
+      if (metric?.compareUnit && row?.compareValue !== null && row?.compareValue !== undefined) {
+        detail.push(["对比口径", `${fmt(row.compareValue, 2)} ${metric.compareUnit}`]);
+      }
     }
     document.getElementById("detailTitle").textContent = `${item.label} ${state.mode === "compare" ? "对比" : "详情"}`;
     document.getElementById("detailList").innerHTML = detail.map(row => `
@@ -705,25 +803,25 @@
     `).join("");
     const notes = state.mode === "compare"
       ? [item.caveat, ...data.meta.notes]
-      : [metricFor(item, state.mode)?.sourceNote, ...data.meta.notes].filter(Boolean);
+      : [selectedMetric()?.sourceNote, ...data.meta.notes].filter(Boolean);
     document.getElementById("noteBox").innerHTML = notes.map(note => `<div>${note}</div>`).join("");
   }
 
   function renderTable() {
     if (state.mode === "compare") {
-      document.getElementById("tableTitle").textContent = "中美对比明细";
+      document.getElementById("tableTitle").textContent = "各国对比明细";
       document.getElementById("tableHead").innerHTML = `
-        <tr><th>品类</th><th>中国</th><th>美国</th><th>价差</th><th>价比</th><th>中国日期</th><th>美国日期</th><th>可比性</th></tr>
+        <tr><th>品类</th><th>参与对比国家</th><th>价差区间</th><th>最高/最低</th><th>可比性</th></tr>
       `;
       document.getElementById("tableBody").innerHTML = data.comparisons.map(row => `
         <tr data-product="${row.productId}">
           <td>${row.label}</td>
-          <td>${fmt(row.chinaValue, 2)}</td>
-          <td>${fmt(row.usValue, 2)}</td>
-          <td>${fmt(row.gap, 2)}</td>
-          <td>${row.ratio === null ? "—" : fmt(row.ratio, 2)}</td>
-          <td>${row.chinaDate}</td>
-          <td>${row.usDate}</td>
+          <td>${(row.countries || []).map(country => {
+            const value = row.countryValues?.[country];
+            return `${countryLabel(country)} ${countryValueText(value)} <span class="muted">${value.date}</span>`;
+          }).join("<br>")}</td>
+          <td>${row.gap === null || row.gap === undefined ? "—" : fmt(row.gap, 2)}</td>
+          <td>${row.ratio === null || row.ratio === undefined ? "—" : fmt(row.ratio, 2)}</td>
           <td><span class="tag warn">${row.comparability}</span></td>
         </tr>
       `).join("");
@@ -736,7 +834,7 @@
       document.getElementById("tableBody").innerHTML = rows.map(metric => {
         const row = latest(metric);
         return `
-          <tr data-product="${metric.productId}">
+          <tr data-product="${metric.productId}" data-metric="${metric.id}">
             <td><span class="tag ${state.mode}">${modeLabel()}</span></td>
             <td>${productsById[metric.productId]?.label || metric.productId}</td>
             <td>${metric.label}</td>
@@ -752,6 +850,7 @@
     document.querySelectorAll("tbody tr[data-product]").forEach(row => {
       row.addEventListener("click", () => {
         state.product = row.dataset.product;
+        state.metric = row.dataset.metric || "";
         render();
       });
     });
@@ -761,10 +860,12 @@
     const item = product();
     document.getElementById("viewTag").textContent = modeLabel();
     document.getElementById("viewTag").className = `tag ${state.mode}`;
-    document.getElementById("mainTitle").textContent = `${modeLabel()}核心指标`;
+    document.getElementById("mainTitle").textContent = state.mode === "compare"
+      ? `${modeLabel()}核心指标`
+      : `${modeLabel()} ${item.label}`;
     document.getElementById("mainKicker").textContent = state.mode === "compare"
-      ? "价格统一换算为元/kg；可比性以商品和环节口径为准"
-      : `${modeLabel()}视图展示最近有效价格、环比和同比`;
+      ? "只展示同商品、同价格口径可进入比较的国家；数值使用统一换算口径"
+      : `${modeLabel()}视图展示本国/本地区原始口径、环比和同比`;
     document.getElementById("tableKicker").textContent = `${item.label} 已选中，点击其他行可切换趋势图`;
   }
 
@@ -772,6 +873,7 @@
     document.querySelectorAll(".country-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         state.mode = btn.dataset.mode;
+        state.metric = "";
         render();
       });
     });
@@ -779,6 +881,7 @@
   }
 
   function render() {
+    ensureState();
     setUrl();
     renderShell();
     renderTitles();
