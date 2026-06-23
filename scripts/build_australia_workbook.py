@@ -237,7 +237,7 @@ def main():
 
     now = dt.datetime.now(dt.UTC).astimezone(ZoneInfo(OUTPUT_TIMEZONE))
     export_date = now.strftime("%Y-%m-%d")
-    output = resolve_path(args.output) if args.output else output_dir / f"【澳洲】农业数据_{export_date}.xlsx"
+    output = resolve_path(args.output) if args.output else output_dir / f"澳洲农业数据_{export_date}.xlsx"
 
     data = pd.read_csv(input_csv, encoding="utf-8-sig")
     sheets = wide_by_category(data)

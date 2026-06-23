@@ -21,6 +21,7 @@ MOA_INPUT_PATTERNS = [
 ]
 
 USDA_INPUT_PATTERNS = [
+    "data/美国农业数据_*_合并长表.csv",
     "data/【美国】农业数据_*_合并长表.csv",
     "data/美国USDA农业数据_*_合并长表.csv",
     "data/USDA农业数据_*_合并长表.csv",

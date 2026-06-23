@@ -47,26 +47,26 @@ workflow 文件：
 USDA 数据会写入仓库 `data/`：
 
 ```text
-data/【美国】农业数据_YYYY-MM-DD.xlsx
-data/【美国】农业数据_YYYY-MM-DD_合并长表.csv
+data/美国农业数据_YYYY-MM-DD.xlsx
+data/美国农业数据_YYYY-MM-DD_合并长表.csv
 data/raw/*.csv
 ```
 
 农业农村部 Excel、历史基线和澳洲本地长表会写入：
 
 ```text
-dist/【中国】农业数据_YYYY-MM-DD.xlsx
+dist/中国农业数据_YYYY-MM-DD.xlsx
 data/moa/baseline_moa_jcyj_data.json
-dist/【澳洲】农业数据_YYYY-MM-DD.xlsx
+dist/澳洲农业数据_YYYY-MM-DD.xlsx
 data/澳洲农业数据_YYYY-MM-DD_HHMM_合并长表.csv
 ```
 
 每周邮件附件包含：
 
 ```text
-【美国】农业数据_YYYY-MM-DD.xlsx
-【中国】农业数据_YYYY-MM-DD.xlsx
-【澳洲】农业数据_YYYY-MM-DD.xlsx
+美国农业数据_YYYY-MM-DD.xlsx
+中国农业数据_YYYY-MM-DD.xlsx
+澳洲农业数据_YYYY-MM-DD.xlsx
 各国农业数据监测看板.zip
 dashboard-data.json
 ```
@@ -90,7 +90,7 @@ python scripts/build_moa_workbook.py \
   --template templates/moa_chart_format_template.xlsx \
   --output dist
 
-US_CSV="$(ls -1t data/【美国】农业数据_*_合并长表.csv | head -n 1)"
+US_CSV="$(ls -1t data/美国农业数据_*_合并长表.csv | head -n 1)"
 AU_CSV="$(ls -1t data/澳洲农业数据_*_合并长表.csv | head -n 1)"
 
 python scripts/build_australia_workbook.py \
