@@ -1,0 +1,40 @@
+name: USDA NASS 价格自动抓取
+
+on:
+  schedule:
+    # 每周一 00:00 UTC = 北京时间周一 08:00(早上)运行;NASS 月度数据更新频率低,每周足够
+    # 注:GitHub Actions 高峰期 cron 可能延迟几分钟到几十分钟,属正常
+    - cron: "0 0 * * 1"
+  workflow_dispatch: {}   # 也支持在 Actions 页面手动点 Run
+
+permissions:
+  contents: write          # 允许把抓到的数据提交回仓库
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 运行抓取脚本
+        env:
+          NASS_API_KEY: ${{ secrets.NASS_API_KEY }}
+          FX_USD_CNY: "6.77"
+        run: python fetch_usda.py
+
+      - name: 提交更新的数据
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "数据自动更新 $(date -u '+%Y-%m-%d')"
+          git push
