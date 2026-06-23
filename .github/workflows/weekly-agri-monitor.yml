@@ -32,6 +32,11 @@ jobs:
         with:
           node-version: "24"
 
+      - name: 安装 Playwright 浏览器
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+
       - name: 安装 Python
         uses: actions/setup-python@v5
         with:
@@ -62,6 +67,9 @@ jobs:
             --input dist/moa/moa_jcyj_data_merged.json \
             --template templates/moa_chart_format_template.xlsx \
             --output dist
+
+      - name: 抓取澳洲公开数据
+        run: python scripts/fetch_australia.py --output-dir data
 
       - name: 汇总本次输出路径
         run: |

@@ -52,13 +52,13 @@ data/美国农业数据_YYYY-MM-DD_合并长表.csv
 data/raw/*.csv
 ```
 
-农业农村部 Excel、历史基线和澳洲本地长表会写入：
+农业农村部 Excel、历史基线和澳洲实时长表会写入：
 
 ```text
 dist/中国农业数据_YYYY-MM-DD.xlsx
 data/moa/baseline_moa_jcyj_data.json
-dist/澳洲农业数据_YYYY-MM-DD.xlsx
 data/澳洲农业数据_YYYY-MM-DD_HHMM_合并长表.csv
+dist/澳洲农业数据_YYYY-MM-DD.xlsx
 ```
 
 每周邮件附件包含：
@@ -90,6 +90,8 @@ python scripts/build_moa_workbook.py \
   --template templates/moa_chart_format_template.xlsx \
   --output dist
 
+python scripts/fetch_australia.py --output-dir data
+
 US_CSV="$(ls -1t data/美国农业数据_*_合并长表.csv | head -n 1)"
 AU_CSV="$(ls -1t data/澳洲农业数据_*_合并长表.csv | head -n 1)"
 
@@ -114,5 +116,5 @@ python scripts/prepare_china_us_dashboard.py \
 
 - 中国：农业农村部畜牧兽医局监测预警，周度数据。
 - 美国：USDA NASS Quick Stats，月度 Price Received 数据。
-- 澳洲：MLA/NLRS、Australian Pork/ProFarmer、ABS CPI 与 ABS Livestock Products 等本地抓取后的公开数据。
+- 澳洲：每周实时抓取 MLA/NLRS、Australian Pork/ProFarmer、ABS CPI 与 ABS Livestock Products 公开数据。
 - 单国视图保留各自原始单位；各国对比只展示同商品、同价格口径可进入比较的国家，并统一换算为元/kg。
