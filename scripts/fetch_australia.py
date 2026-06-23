@@ -131,15 +131,16 @@ def filename_for_url(url):
     return name
 
 
-def run_mla_exports(raw_dir):
+def run_mla_exports(raw_dir, full_history):
     node = os.environ.get("NODE_BINARY") or "node"
     tool = ROOT / "tools/export_mla_powerbi.cjs"
+    mode = "--all-dates" if full_history else "--current"
     outputs = {}
     for name, (url, relative_out) in MLA_REPORTS.items():
         out_path = raw_dir / relative_out
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        command = [node, str(tool), "--all-dates", url, str(out_path)]
-        print(f"[MLA] exporting {name}: {url}")
+        command = [node, str(tool), mode, url, str(out_path)]
+        print(f"[MLA] exporting {name} ({mode}): {url}")
         subprocess.run(command, cwd=ROOT, check=True)
         outputs[name] = out_path
     return outputs
@@ -475,15 +476,40 @@ def cleanup_previous_outputs(output_dir):
         path.unlink()
 
 
+def find_latest_australia_csv(output_dir):
+    candidates = list(output_dir.glob("澳洲农业数据_*_合并长表.csv"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (path.stat().st_mtime, path.name))
+
+
+def merge_with_baseline(current, baseline_path):
+    if not baseline_path or not baseline_path.exists():
+        return current
+    baseline = pd.read_csv(baseline_path, encoding="utf-8-sig")
+    expected = {"品类", "指标", "日期", "数值"}
+    if not expected.issubset(baseline.columns):
+        raise RuntimeError(f"澳洲 baseline CSV 字段不完整: {baseline_path}")
+    baseline = baseline[["品类", "指标", "日期", "数值"]].copy()
+    combined = pd.concat([baseline, current], ignore_index=True)
+    combined["日期"] = pd.to_datetime(combined["日期"], errors="coerce").dt.strftime("%Y-%m-%d")
+    combined["数值"] = pd.to_numeric(combined["数值"], errors="coerce")
+    combined = combined.dropna(subset=["日期", "数值"])
+    combined = combined.drop_duplicates(["品类", "指标", "日期"], keep="last")
+    return combined.sort_values(["品类", "指标", "日期"]).reset_index(drop=True)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="实时抓取澳洲农业公开数据并生成合并长表")
     parser.add_argument("--output-dir", default=str(ROOT / "data"), help="输出 CSV 目录")
     parser.add_argument("--raw-dir", default=str(RAW), help="实时下载源文件暂存目录")
+    parser.add_argument("--baseline", help="上一版澳洲合并长表 CSV；不传则自动找 output-dir 下最新文件")
+    parser.add_argument("--full-history", action="store_true", help="强制抓取 MLA 全历史并解析全部 Australian Pork PDF")
     parser.add_argument(
         "--pork-max-pdfs",
         type=int,
-        default=int(os.environ.get("AUSTRALIA_PORK_MAX_PDFS", "0") or "0"),
-        help="Australian Pork PDF 下载数量；0 表示下载页面上全部 PDF",
+        default=int(os.environ.get("AUSTRALIA_PORK_MAX_PDFS", "16") or "16"),
+        help="Australian Pork PDF 下载数量；0 表示下载页面上全部 PDF；有 baseline 时默认只抓最新16期",
     )
     parser.add_argument("--skip-download", action="store_true", help="仅用 raw-dir 已有源文件重建长表")
     return parser.parse_args()
@@ -500,11 +526,24 @@ def main():
     raw_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if args.baseline:
+        baseline_path = Path(args.baseline)
+        if not baseline_path.is_absolute():
+            baseline_path = ROOT / baseline_path
+    else:
+        baseline_path = find_latest_australia_csv(output_dir)
+    full_history = args.full_history or baseline_path is None
+    pork_max_pdfs = 0 if full_history else args.pork_max_pdfs
+    mode_text = "full-history" if full_history else "incremental"
+    if baseline_path:
+        print(f"[BASELINE] {baseline_path}")
+    print(f"[MODE] {mode_text}; pork_max_pdfs={pork_max_pdfs}")
+
     client = session()
     if not args.skip_download:
-        run_mla_exports(raw_dir)
+        run_mla_exports(raw_dir, full_history)
         download_abs_tables(client, raw_dir)
-        pdfs = download_pork_reports(client, raw_dir, args.pork_max_pdfs)
+        pdfs = download_pork_reports(client, raw_dir, pork_max_pdfs)
     else:
         pdfs = sorted((raw_dir / "pork_pdfs").glob("*.pdf"))
         if not pdfs:
@@ -519,6 +558,8 @@ def main():
         "饲料": build_feed_monthly(pdfs),
     }
     out = build_long(sheets)
+    new_rows = len(out)
+    out = merge_with_baseline(out, baseline_path)
 
     now = dt.datetime.now(dt.UTC).astimezone(ZoneInfo(OUTPUT_TIMEZONE))
     stamp = now.strftime("%Y-%m-%d_%H%M")
@@ -531,7 +572,10 @@ def main():
             {
                 "output": str(out_path),
                 "rows": len(out),
+                "newRowsBeforeBaselineMerge": new_rows,
                 "metrics": int(out["指标"].nunique()),
+                "baseline": str(baseline_path) if baseline_path else None,
+                "mode": mode_text,
                 "latestByCategory": latest_by_category,
             },
             ensure_ascii=False,

@@ -21,15 +21,15 @@ function loadPlaywright() {
 function parseArgs(argv) {
   const args = argv.slice(2);
   const mode = args[0];
-  if (mode !== "--all-dates") {
-    throw new Error("Usage: node tools/export_mla_powerbi.cjs --all-dates <url> <output.csv>");
+  if (!["--all-dates", "--current"].includes(mode)) {
+    throw new Error("Usage: node tools/export_mla_powerbi.cjs (--all-dates|--current) <url> <output.csv>");
   }
   const targetUrl = args[1];
   const outputPath = args[2];
   if (!targetUrl || !outputPath) {
-    throw new Error("Usage: node tools/export_mla_powerbi.cjs --all-dates <url> <output.csv>");
+    throw new Error("Usage: node tools/export_mla_powerbi.cjs (--all-dates|--current) <url> <output.csv>");
   }
-  return { targetUrl, outputPath };
+  return { mode, targetUrl, outputPath };
 }
 
 function launchOptions(chromium) {
@@ -110,8 +110,33 @@ async function exportAllDates(page) {
   });
 }
 
+async function exportCurrent(page) {
+  return page.evaluate(async () => {
+    const container = document.getElementById("report-container");
+    const report = window.powerbi.get(container);
+    const models = window["powerbi-client"].models;
+    const pages = await report.getPages();
+    const activePage = pages.find((item) => item.isActive) || pages[0];
+    await activePage.setActive();
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const visuals = await activePage.getVisuals();
+    const chart =
+      visuals.find((visual) => visual.title === "Data Chart") ||
+      visuals.find((visual) => visual.title === "Data Table");
+    if (!chart) {
+      throw new Error("No Data Chart/Data Table visual found in MLA PowerBI report");
+    }
+    const data = await chart.exportData(models.ExportDataType.Summarized);
+    return {
+      data: data.data,
+      log: ["used report default filters"],
+      visual: { title: chart.title, name: chart.name, type: chart.type },
+    };
+  });
+}
+
 async function main() {
-  const { targetUrl, outputPath } = parseArgs(process.argv);
+  const { mode, targetUrl, outputPath } = parseArgs(process.argv);
   const { chromium } = loadPlaywright();
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
@@ -130,7 +155,7 @@ async function main() {
     await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForSelector("#export_button", { state: "visible", timeout: 120000 });
     await page.waitForTimeout(8000);
-    const result = await exportAllDates(page);
+    const result = mode === "--all-dates" ? await exportAllDates(page) : await exportCurrent(page);
     await fs.writeFile(outputPath, result.data);
     const stat = await fs.stat(outputPath);
     console.log(
