@@ -2,8 +2,9 @@
 
 这个仓库每周一自动生成并邮件发送：
 
-- USDA NASS 农业数据 Excel
-- 农业农村部监测预警 Excel
+- 美国 USDA NASS 农业数据 Excel
+- 中国农业农村部监测预警 Excel
+- 澳洲农业数据 Excel
 - 各国农业数据合并看板 zip
 - 看板所用 `dashboard-data.json`
 
@@ -46,8 +47,8 @@ workflow 文件：
 USDA 数据会写入仓库 `data/`：
 
 ```text
-data/USDA农业数据_YYYY-MM-DD_HHMM.xlsx
-data/USDA农业数据_YYYY-MM-DD_HHMM_合并长表.csv
+data/美国USDA农业数据_YYYY-MM-DD_HHMM.xlsx
+data/美国USDA农业数据_YYYY-MM-DD_HHMM_合并长表.csv
 data/raw/*.csv
 ```
 
@@ -61,8 +62,9 @@ data/澳洲农业数据_YYYY-MM-DD_HHMM_合并长表.csv
 每周邮件附件包含：
 
 ```text
-USDA农业数据_YYYY-MM-DD_HHMM.xlsx
-农业农村部监测预警数据汇总_YYYYMMDD_清洗版.xlsx
+美国USDA农业数据_YYYY-MM-DD_HHMM.xlsx
+中国农业农村部监测预警数据汇总_YYYYMMDD_清洗版.xlsx
+澳洲农业数据_YYYY-MM-DD_HHMM.xlsx
 各国农业数据监测看板.zip
 dashboard-data.json
 ```
@@ -86,11 +88,17 @@ python scripts/build_moa_workbook.py \
   --template templates/moa_chart_format_template.xlsx \
   --output dist
 
-USDA_CSV="$(ls -1t data/USDA农业数据_*_合并长表.csv | head -n 1)"
+US_CSV="$(ls -1t data/美国USDA农业数据_*_合并长表.csv | head -n 1)"
+AU_CSV="$(ls -1t data/澳洲农业数据_*_合并长表.csv | head -n 1)"
+
+python scripts/build_australia_workbook.py \
+  --input "$AU_CSV" \
+  --output-dir dist
 
 python scripts/build_china_us_agri_dashboard_data.py \
   --moa-json dist/moa/moa_jcyj_data_merged.json \
-  --usda-csv "$USDA_CSV" \
+  --usda-csv "$US_CSV" \
+  --australia-csv "$AU_CSV" \
   --output dist/dashboard/data/dashboard-data.json
 
 python scripts/prepare_china_us_dashboard.py \

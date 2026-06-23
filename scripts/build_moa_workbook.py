@@ -566,7 +566,7 @@ def main():
     if output.suffix.lower() != ".xlsx":
         date_tag = latest_publish_date(articles).replace("-", "")
         output.mkdir(parents=True, exist_ok=True)
-        output = output / f"农业农村部监测预警数据汇总_{date_tag}_清洗版.xlsx"
+        output = output / f"中国农业农村部监测预警数据汇总_{date_tag}_清洗版.xlsx"
     output.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output)
     print(json.dumps({"output": str(output), "marketRows": len(market_rows), "slaughterRows": len(slaughter_rows)}, ensure_ascii=False))

@@ -387,7 +387,12 @@ def cleanup_previous_outputs():
         output_dir / "USDA畜牧饲料价格_自动更新.xlsx",
         output_dir / "USDA_价格_合并长表.csv",
     ]
-    dynamic_files = list(output_dir.glob("USDA农业数据_*.xlsx")) + list(output_dir.glob("USDA农业数据_*.csv"))
+    dynamic_files = (
+        list(output_dir.glob("USDA农业数据_*.xlsx"))
+        + list(output_dir.glob("USDA农业数据_*.csv"))
+        + list(output_dir.glob("美国USDA农业数据_*.xlsx"))
+        + list(output_dir.glob("美国USDA农业数据_*.csv"))
+    )
     for file_path in legacy_files + dynamic_files:
         if file_path.exists():
             file_path.unlink()
@@ -399,7 +404,7 @@ def main():
     stamp = now_local.strftime("%Y-%m-%d %H:%M %Z")
     export_date = now_local.strftime("%Y-%m-%d")
     output_stamp = now_local.strftime("%Y-%m-%d_%H%M")
-    output_base = f"USDA农业数据_{output_stamp}"
+    output_base = f"美国USDA农业数据_{output_stamp}"
     wide_by_name = {}
     all_proc = []
     for name, cfg in CATS.items():

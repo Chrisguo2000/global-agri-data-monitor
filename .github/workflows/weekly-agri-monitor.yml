@@ -65,24 +65,39 @@ jobs:
 
       - name: 汇总本次输出路径
         run: |
-          USDA_XLSX="$(ls -1t data/USDA农业数据_*.xlsx | head -n 1)"
-          USDA_CSV="$(ls -1t data/USDA农业数据_*_合并长表.csv | head -n 1)"
-          MOA_XLSX="$(ls -1t dist/农业农村部监测预警数据汇总_*_清洗版.xlsx | head -n 1)"
-          for file in "$USDA_XLSX" "$USDA_CSV" "$MOA_XLSX" dist/moa/moa_jcyj_data_merged.json; do
+          US_XLSX="$(ls -1t data/美国USDA农业数据_*.xlsx | head -n 1)"
+          US_CSV="$(ls -1t data/美国USDA农业数据_*_合并长表.csv | head -n 1)"
+          CN_XLSX="$(ls -1t dist/中国农业农村部监测预警数据汇总_*_清洗版.xlsx | head -n 1)"
+          AU_CSV="$(ls -1t data/澳洲农业数据_*_合并长表.csv | head -n 1)"
+          for file in "$US_XLSX" "$US_CSV" "$CN_XLSX" "$AU_CSV" dist/moa/moa_jcyj_data_merged.json; do
             if [ -z "$file" ] || [ ! -f "$file" ]; then
               echo "::error::缺少本次输出文件: $file"
               exit 1
             fi
           done
-          echo "USDA_XLSX=$USDA_XLSX" >> "$GITHUB_ENV"
-          echo "USDA_CSV=$USDA_CSV" >> "$GITHUB_ENV"
-          echo "MOA_XLSX=$MOA_XLSX" >> "$GITHUB_ENV"
+          echo "US_XLSX=$US_XLSX" >> "$GITHUB_ENV"
+          echo "US_CSV=$US_CSV" >> "$GITHUB_ENV"
+          echo "CN_XLSX=$CN_XLSX" >> "$GITHUB_ENV"
+          echo "AU_CSV=$AU_CSV" >> "$GITHUB_ENV"
+
+      - name: 生成澳洲 Excel
+        run: |
+          python scripts/build_australia_workbook.py \
+            --input "$AU_CSV" \
+            --output-dir dist
+          AU_XLSX="$(ls -1t dist/澳洲农业数据_*.xlsx | head -n 1)"
+          if [ -z "$AU_XLSX" ] || [ ! -f "$AU_XLSX" ]; then
+            echo "::error::缺少澳洲 Excel 输出"
+            exit 1
+          fi
+          echo "AU_XLSX=$AU_XLSX" >> "$GITHUB_ENV"
 
       - name: 生成各国合并看板数据
         run: |
           python scripts/build_china_us_agri_dashboard_data.py \
             --moa-json dist/moa/moa_jcyj_data_merged.json \
-            --usda-csv "$USDA_CSV" \
+            --usda-csv "$US_CSV" \
+            --australia-csv "$AU_CSV" \
             --output dist/dashboard/data/dashboard-data.json
 
       - name: 打包各国合并看板
@@ -135,8 +150,8 @@ jobs:
         run: |
           python scripts/send_email.py \
             --subject "各国农业数据自动周报" \
-            --body "您好，附件为本周自动生成的各国农业数据周报：1) USDA Excel；2) 农业农村部 Excel；3) 各国合并看板 zip；4) 看板所用 dashboard-data.json。看板 zip 解压后直接打开 HTML 即可，不需要手动上传数据文件。" \
-            --attachments "$USDA_XLSX" "$MOA_XLSX" "dist/各国农业数据监测看板.zip" "dist/dashboard/data/dashboard-data.json"
+            --body "您好，附件为本周自动生成的各国农业数据周报：1) 美国USDA Excel；2) 中国农业农村部 Excel；3) 澳洲农业数据 Excel；4) 各国合并看板 zip；5) 看板所用 dashboard-data.json。看板 zip 解压后直接打开 HTML 即可，不需要手动上传数据文件。" \
+            --attachments "$US_XLSX" "$CN_XLSX" "$AU_XLSX" "dist/各国农业数据监测看板.zip" "dist/dashboard/data/dashboard-data.json"
 
       - name: 上传运行产物
         if: always()
@@ -144,8 +159,9 @@ jobs:
         with:
           name: weekly-agri-monitor-output
           path: |
-            data/USDA农业数据_*.xlsx
-            data/USDA农业数据_*_合并长表.csv
+            data/美国USDA农业数据_*.xlsx
+            data/美国USDA农业数据_*_合并长表.csv
+            data/澳洲农业数据_*_合并长表.csv
             dist/*.xlsx
             dist/*.zip
             dist/dashboard/data/dashboard-data.json

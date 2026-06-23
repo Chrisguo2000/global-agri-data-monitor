@@ -21,6 +21,7 @@ MOA_INPUT_PATTERNS = [
 ]
 
 USDA_INPUT_PATTERNS = [
+    "data/美国USDA农业数据_*_合并长表.csv",
     "data/USDA农业数据_*_合并长表.csv",
     "data/USDA_价格_合并长表.csv",
 ]
@@ -852,7 +853,7 @@ def build_comparisons(metrics_by_id):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="生成中美农业数据看板的数据文件")
+    parser = argparse.ArgumentParser(description="生成各国农业数据看板的数据文件")
     parser.add_argument("--moa-json", help="农业部本周合并后的 JSON；不传则自动找最新可用文件")
     parser.add_argument("--usda-csv", help="USDA 本周合并长表 CSV；不传则自动找最新可用文件")
     parser.add_argument("--australia-csv", help="澳洲农业数据合并长表 CSV；不传则自动找最新可用文件")
