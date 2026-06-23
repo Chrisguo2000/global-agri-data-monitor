@@ -41,10 +41,10 @@ def main():
     args = parser.parse_args()
 
     smtp_host = env_required("SMTP_HOST")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_port = int(os.environ.get("SMTP_PORT") or "587")
     smtp_username = env_required("SMTP_USERNAME")
     smtp_password = env_required("SMTP_PASSWORD")
-    mail_from = os.environ.get("MAIL_FROM", smtp_username)
+    mail_from = os.environ.get("MAIL_FROM") or smtp_username
     mail_to = env_required("MAIL_TO")
 
     message = EmailMessage()
