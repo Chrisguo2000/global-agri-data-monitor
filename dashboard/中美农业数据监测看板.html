@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>中美农业数据监测看板</title>
+<script src="data/dashboard-data.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --line: #d9dee7;
+    --line-strong: #bcc5d3;
+    --text: #1f2937;
+    --muted: #667085;
+    --soft: #eef1f5;
+    --china: #b53d45;
+    --us: #1f6f8b;
+    --accent: #a66f2a;
+    --good: #2b7a58;
+    --bad: #c2413a;
+    --warn: #b7791f;
+    --navy: #24364b;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, select { font: inherit; }
+  button { border: 0; cursor: pointer; }
+  .app {
+    width: min(1760px, calc(100vw - 40px));
+    margin: 0 auto;
+    padding: 18px 0 32px;
+  }
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .mark {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: var(--navy);
+    color: white;
+    font-weight: 750;
+    font-size: 15px;
+  }
+  .title {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.18;
+    font-weight: 760;
+  }
+  .subtitle {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .country-switch {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 10px 0 14px;
+  }
+  .country-btn {
+    min-height: 58px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    text-align: left;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .country-btn strong {
+    display: block;
+    font-size: 17px;
+    margin-bottom: 3px;
+  }
+  .country-btn span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .country-btn.active {
+    border-color: var(--navy);
+    box-shadow: inset 0 0 0 1px var(--navy);
+  }
+  .country-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    background: var(--muted);
+  }
+  .country-btn[data-mode="china"] .country-dot { background: var(--china); }
+  .country-btn[data-mode="us"] .country-dot { background: var(--us); }
+  .country-btn[data-mode="compare"] .country-dot { background: var(--accent); }
+  .product-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 0 0 10px;
+    margin-bottom: 4px;
+  }
+  .product-btn {
+    min-height: 34px;
+    flex: 0 0 auto;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    padding: 0 12px;
+  }
+  .product-btn.active {
+    background: var(--navy);
+    border-color: var(--navy);
+    color: white;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.9fr);
+    gap: 14px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    min-width: 0;
+  }
+  .panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .panel-title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.3;
+    font-weight: 740;
+  }
+  .panel-kicker {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .metric-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfcfd;
+    padding: 12px;
+    min-height: 118px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .metric-card.selected {
+    border-color: var(--navy);
+    box-shadow: inset 0 0 0 1px var(--navy);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card-name {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .card-source {
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+  }
+  .value {
+    font-size: 25px;
+    font-weight: 780;
+    font-family: "DIN Alternate", "Arial Narrow", Arial, sans-serif;
+    color: var(--navy);
+  }
+  .unit {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .delta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: auto;
+  }
+  .delta b { font-weight: 730; }
+  .delta.pos b { color: var(--good); }
+  .delta.neg b { color: var(--bad); }
+  .delta.flat b { color: var(--muted); }
+  .chart-box {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfcfd;
+    height: 390px;
+    overflow: hidden;
+  }
+  svg { display: block; width: 100%; height: 100%; }
+  .axis text {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .axis line, .grid line {
+    stroke: #dfe4eb;
+    stroke-width: 1;
+  }
+  .series-line {
+    fill: none;
+    stroke-width: 2.4;
+  }
+  .series-label {
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .side-grid {
+    display: grid;
+    gap: 14px;
+  }
+  .detail-list {
+    display: grid;
+    gap: 9px;
+  }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--soft);
+    padding-bottom: 8px;
+    font-size: 13px;
+  }
+  .detail-row:last-child { border-bottom: 0; padding-bottom: 0; }
+  .detail-row span { color: var(--muted); }
+  .detail-row b { text-align: right; font-weight: 700; }
+  .note-box {
+    border-left: 4px solid var(--accent);
+    background: #fff8ee;
+    padding: 10px 12px;
+    color: #604414;
+    font-size: 13px;
+    line-height: 1.55;
+    border-radius: 0 8px 8px 0;
+  }
+  .table-panel {
+    margin-top: 14px;
+  }
+  .table-wrap {
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 840px;
+    background: var(--surface);
+  }
+  th, td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--soft);
+    text-align: left;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  th {
+    background: var(--navy);
+    color: white;
+    font-weight: 720;
+  }
+  tbody tr:hover { background: #f7f9fb; }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    border-radius: 6px;
+    padding: 0 8px;
+    background: var(--soft);
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .tag.china { background: #f7e8ea; color: var(--china); }
+  .tag.us { background: #e8f1f6; color: var(--us); }
+  .tag.warn { background: #fff4dc; color: var(--warn); }
+  .empty-state {
+    height: 100%;
+    min-height: 240px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    text-align: center;
+    padding: 24px;
+  }
+  @media (max-width: 1180px) {
+    .layout { grid-template-columns: 1fr; }
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .topbar { grid-template-columns: 1fr; }
+    .toolbar { justify-content: flex-start; }
+  }
+  @media (max-width: 720px) {
+    .app { width: min(100vw - 24px, 720px); padding-top: 12px; }
+    .country-switch { grid-template-columns: 1fr; }
+    .cards { grid-template-columns: 1fr; }
+    .panel { padding: 12px; }
+    .chart-box { height: 330px; }
+    .title { font-size: 19px; }
+    .metric-card { min-height: 106px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">AG</div>
+      <div>
+        <h1 class="title">中美农业数据监测看板</h1>
+        <div class="subtitle" id="subtitle">中国农业部周度数据与 USDA 月度数据统一监测</div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="chip" id="chinaDate">中国数据</div>
+      <div class="chip" id="usDate">美国数据</div>
+      <div class="chip" id="metricCount">指标</div>
+    </div>
+  </header>
+
+  <nav class="country-switch" aria-label="国家视图">
+    <button class="country-btn" data-mode="china">
+      <span><strong>中国</strong><span>农业农村部监测预警</span></span>
+      <i class="country-dot"></i>
+    </button>
+    <button class="country-btn" data-mode="us">
+      <span><strong>美国</strong><span>USDA NASS Quick Stats</span></span>
+      <i class="country-dot"></i>
+    </button>
+    <button class="country-btn" data-mode="compare">
+      <span><strong>中美对比</strong><span>统一元/kg口径观察</span></span>
+      <i class="country-dot"></i>
+    </button>
+  </nav>
+
+  <div class="product-strip" id="productStrip" aria-label="品类选择"></div>
+
+  <main class="layout">
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title" id="mainTitle">核心指标</h2>
+          <div class="panel-kicker" id="mainKicker">按当前视图展示最近有效价格</div>
+        </div>
+        <span class="tag" id="viewTag">中美对比</span>
+      </div>
+      <div class="cards" id="metricCards"></div>
+      <div class="chart-box" id="chartBox"></div>
+    </section>
+
+    <aside class="side-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" id="detailTitle">指标解释</h2>
+            <div class="panel-kicker" id="detailKicker">最新值、口径和可比性</div>
+          </div>
+        </div>
+        <div class="detail-list" id="detailList"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">口径提示</h2>
+            <div class="panel-kicker">跨国比较默认展示统一换算价</div>
+          </div>
+        </div>
+        <div class="note-box" id="noteBox"></div>
+      </section>
+    </aside>
+  </main>
+
+  <section class="panel table-panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="panel-title" id="tableTitle">指标明细</h2>
+        <div class="panel-kicker" id="tableKicker">最近有效值与变化幅度</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const data = window.CHINA_US_AGRI_DASHBOARD_DATA;
+  const metricsById = Object.fromEntries(data.metrics.map(metric => [metric.id, metric]));
+  const productsById = Object.fromEntries(data.products.map(product => [product.id, product]));
+  const params = new URLSearchParams(window.location.search);
+  const state = {
+    mode: params.get("view") || "compare",
+    product: params.get("product") || "hog",
+  };
+
+  const colors = {
+    china: getCss("--china"),
+    us: getCss("--us"),
+    compare: getCss("--accent"),
+    text: getCss("--text"),
+    muted: getCss("--muted"),
+    grid: "#dfe4eb",
+  };
+
+  function getCss(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function setUrl() {
+    const next = new URLSearchParams({ view: state.mode, product: state.product });
+    history.replaceState(null, "", `${location.pathname}?${next.toString()}`);
+  }
+
+  function fmt(value, digits = 2) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+    return Number(value).toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  }
+
+  function fmtPct(value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+    const cls = value > 0 ? "pos" : value < 0 ? "neg" : "flat";
+    const sign = value > 0 ? "+" : "";
+    return `<span class="delta ${cls}">变化 <b>${sign}${fmt(value, 1)}%</b></span>`;
+  }
+
+  function metricFor(product, country) {
+    const key = country === "china" ? product.chinaMetric : product.usMetric;
+    return metricsById[key];
+  }
+
+  function modeLabel() {
+    if (state.mode === "china") return "中国";
+    if (state.mode === "us") return "美国";
+    return "中美对比";
+  }
+
+  function product() {
+    return productsById[state.product] || data.products[0];
+  }
+
+  function validSeries(metric) {
+    return (metric?.series || []).filter(row => row.value !== null && row.value !== undefined);
+  }
+
+  function latest(metric) {
+    return metric?.latest || validSeries(metric).at(-1) || null;
+  }
+
+  function renderShell() {
+    document.getElementById("chinaDate").textContent = `中国 ${data.countries.china.latestDate || "—"}`;
+    document.getElementById("usDate").textContent = `美国 ${data.countries.us.latestDate || "—"}`;
+    document.getElementById("metricCount").textContent = `${data.metrics.length} 个指标`;
+    document.querySelectorAll(".country-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.mode === state.mode);
+    });
+    const strip = document.getElementById("productStrip");
+    strip.innerHTML = data.products.map(item => (
+      `<button class="product-btn ${item.id === state.product ? "active" : ""}" data-product="${item.id}">${item.label}</button>`
+    )).join("");
+    strip.querySelectorAll(".product-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.product = btn.dataset.product;
+        render();
+      });
+    });
+  }
+
+  function renderCards() {
+    const cards = [];
+    if (state.mode === "compare") {
+      for (const item of data.products) {
+        const comparison = data.comparisons.find(row => row.productId === item.id);
+        if (!comparison) continue;
+        cards.push({
+          id: item.id,
+          name: item.label,
+          source: comparison.comparability,
+          value: comparison.ratio,
+          unit: "倍",
+          sub: `中国 ${fmt(comparison.chinaValue, 2)} / 美国 ${fmt(comparison.usValue, 2)}`,
+          mom: null,
+          yoy: null,
+        });
+      }
+    } else {
+      for (const item of data.products) {
+        const metric = metricFor(item, state.mode);
+        const row = latest(metric);
+        if (!metric || !row) continue;
+        cards.push({
+          id: item.id,
+          name: metric.label,
+          source: metric.frequency,
+          value: row.value,
+          unit: metric.unit,
+          sub: row.date,
+          mom: row.momPct,
+          yoy: row.yoyPct,
+        });
+      }
+    }
+    document.getElementById("metricCards").innerHTML = cards.map(card => `
+      <article class="metric-card ${card.id === state.product ? "selected" : ""}" data-product="${card.id}">
+        <div class="card-top">
+          <div class="card-name">${card.name}</div>
+          <div class="card-source">${card.source}</div>
+        </div>
+        <div class="value-row"><span class="value">${fmt(card.value, card.unit === "倍" ? 2 : 2)}</span><span class="unit">${card.unit}</span></div>
+        <div class="delta-row">
+          <span>${card.sub}</span>
+          ${card.mom === null || card.mom === undefined ? "" : fmtPct(card.mom)}
+          ${card.yoy === null || card.yoy === undefined ? "" : fmtPct(card.yoy).replace("变化", "同比")}
+        </div>
+      </article>
+    `).join("");
+    document.querySelectorAll(".metric-card").forEach(card => {
+      card.addEventListener("click", () => {
+        state.product = card.dataset.product;
+        render();
+      });
+    });
+  }
+
+  function makeChartSeries() {
+    const item = product();
+    if (state.mode === "china" || state.mode === "us") {
+      const metric = metricFor(item, state.mode);
+      return metric ? [{ name: metric.label, country: state.mode, metric, rows: validSeries(metric) }] : [];
+    }
+    const china = metricFor(item, "china");
+    const us = metricFor(item, "us");
+    const result = [];
+    if (china) result.push({ name: "中国", country: "china", metric: china, rows: validSeries(china) });
+    if (us) result.push({ name: "美国", country: "us", metric: us, rows: validSeries(us) });
+    return result;
+  }
+
+  function renderChart() {
+    const box = document.getElementById("chartBox");
+    const series = makeChartSeries().filter(item => item.rows.length);
+    if (!series.length) {
+      box.innerHTML = `<div class="empty-state">暂无可绘制数据</div>`;
+      return;
+    }
+    const width = box.clientWidth || 960;
+    const height = box.clientHeight || 390;
+    const margin = { top: 30, right: 86, bottom: 45, left: 58 };
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+    const all = series.flatMap(item => item.rows.map(row => ({ ...row, ts: Date.parse(row.date) }))).filter(row => Number.isFinite(row.ts));
+    const minT = Math.min(...all.map(row => row.ts));
+    const maxT = Math.max(...all.map(row => row.ts));
+    const values = all.map(row => row.value);
+    let minY = Math.min(...values);
+    let maxY = Math.max(...values);
+    if (minY === maxY) { minY -= 1; maxY += 1; }
+    const pad = (maxY - minY) * 0.12;
+    minY = Math.max(0, minY - pad);
+    maxY += pad;
+    const x = ts => margin.left + ((ts - minT) / Math.max(maxT - minT, 1)) * innerW;
+    const y = value => margin.top + (1 - (value - minY) / (maxY - minY)) * innerH;
+    const yTicks = Array.from({ length: 5 }, (_, idx) => minY + ((maxY - minY) * idx) / 4);
+    const xTicks = Array.from({ length: 5 }, (_, idx) => minT + ((maxT - minT) * idx) / 4);
+    const grid = yTicks.map(tick => `
+      <line x1="${margin.left}" x2="${width - margin.right}" y1="${y(tick)}" y2="${y(tick)}"></line>
+    `).join("");
+    const yLabels = yTicks.map(tick => `
+      <text x="${margin.left - 10}" y="${y(tick) + 4}" text-anchor="end">${fmt(tick, 1)}</text>
+    `).join("");
+    const xLabels = xTicks.map(tick => {
+      const date = new Date(tick);
+      const label = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      return `<text x="${x(tick)}" y="${height - 18}" text-anchor="middle">${label}</text>`;
+    }).join("");
+    const paths = series.map(item => {
+      const points = item.rows
+        .map(row => ({ row, ts: Date.parse(row.date) }))
+        .filter(point => Number.isFinite(point.ts))
+        .map(point => `${x(point.ts).toFixed(1)},${y(point.row.value).toFixed(1)}`)
+        .join(" ");
+      const end = item.rows.at(-1);
+      const endX = x(Date.parse(end.date));
+      const endY = y(end.value);
+      const color = colors[item.country] || colors.compare;
+      return `
+        <polyline class="series-line" points="${points}" stroke="${color}"></polyline>
+        <circle cx="${endX}" cy="${endY}" r="3.6" fill="${color}"></circle>
+        <text class="series-label" x="${Math.min(endX + 8, width - 80)}" y="${endY + 4}" fill="${color}">${item.name}</text>
+      `;
+    }).join("");
+    box.innerHTML = `
+      <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${product().label}趋势图">
+        <g class="grid">${grid}</g>
+        <g class="axis">${yLabels}${xLabels}</g>
+        <line x1="${margin.left}" x2="${width - margin.right}" y1="${height - margin.bottom}" y2="${height - margin.bottom}" stroke="#bcc5d3"></line>
+        <line x1="${margin.left}" x2="${margin.left}" y1="${margin.top}" y2="${height - margin.bottom}" stroke="#bcc5d3"></line>
+        ${paths}
+        <text x="${margin.left}" y="20" fill="${colors.text}" font-size="13" font-weight="700">${product().label} 价格走势</text>
+        <text x="${width - margin.right}" y="20" text-anchor="end" fill="${colors.muted}" font-size="12">元/kg</text>
+      </svg>
+    `;
+  }
+
+  function renderDetails() {
+    const item = product();
+    const comparison = data.comparisons.find(row => row.productId === item.id);
+    const detail = [];
+    if (state.mode === "compare" && comparison) {
+      detail.push(["品类", item.label]);
+      detail.push(["中国最新", `${fmt(comparison.chinaValue, 2)} 元/kg (${comparison.chinaDate})`]);
+      detail.push(["美国最新", `${fmt(comparison.usValue, 2)} 元/kg (${comparison.usDate})`]);
+      detail.push(["价比", comparison.ratio === null ? "—" : `${fmt(comparison.ratio, 2)} 倍`]);
+      detail.push(["可比性", comparison.comparability]);
+    } else {
+      const metric = metricFor(item, state.mode);
+      const row = latest(metric);
+      detail.push(["指标", metric?.label || item.label]);
+      detail.push(["最新值", row ? `${fmt(row.value, 2)} ${metric.unit}` : "—"]);
+      detail.push(["日期", row?.date || "—"]);
+      detail.push(["频率", metric?.frequency || "—"]);
+      detail.push(["来源", metric?.source || "—"]);
+    }
+    document.getElementById("detailTitle").textContent = `${item.label} ${state.mode === "compare" ? "对比" : "详情"}`;
+    document.getElementById("detailList").innerHTML = detail.map(row => `
+      <div class="detail-row"><span>${row[0]}</span><b>${row[1]}</b></div>
+    `).join("");
+    const notes = state.mode === "compare"
+      ? [item.caveat, ...data.meta.notes]
+      : [metricFor(item, state.mode)?.sourceNote, ...data.meta.notes].filter(Boolean);
+    document.getElementById("noteBox").innerHTML = notes.map(note => `<div>${note}</div>`).join("");
+  }
+
+  function renderTable() {
+    if (state.mode === "compare") {
+      document.getElementById("tableTitle").textContent = "中美对比明细";
+      document.getElementById("tableHead").innerHTML = `
+        <tr><th>品类</th><th>中国</th><th>美国</th><th>价差</th><th>价比</th><th>中国日期</th><th>美国日期</th><th>可比性</th></tr>
+      `;
+      document.getElementById("tableBody").innerHTML = data.comparisons.map(row => `
+        <tr data-product="${row.productId}">
+          <td>${row.label}</td>
+          <td>${fmt(row.chinaValue, 2)}</td>
+          <td>${fmt(row.usValue, 2)}</td>
+          <td>${fmt(row.gap, 2)}</td>
+          <td>${row.ratio === null ? "—" : fmt(row.ratio, 2)}</td>
+          <td>${row.chinaDate}</td>
+          <td>${row.usDate}</td>
+          <td><span class="tag warn">${row.comparability}</span></td>
+        </tr>
+      `).join("");
+    } else {
+      document.getElementById("tableTitle").textContent = `${modeLabel()}指标明细`;
+      document.getElementById("tableHead").innerHTML = `
+        <tr><th>国家</th><th>品类</th><th>指标</th><th>最新值</th><th>环比</th><th>同比</th><th>日期</th><th>来源</th></tr>
+      `;
+      const rows = data.metrics.filter(metric => metric.country === state.mode && latest(metric));
+      document.getElementById("tableBody").innerHTML = rows.map(metric => {
+        const row = latest(metric);
+        return `
+          <tr data-product="${metric.productId}">
+            <td><span class="tag ${state.mode}">${modeLabel()}</span></td>
+            <td>${productsById[metric.productId]?.label || metric.productId}</td>
+            <td>${metric.label}</td>
+            <td>${fmt(row.value, 2)} ${metric.unit}</td>
+            <td>${row.momPct === null || row.momPct === undefined ? "—" : `${fmt(row.momPct, 1)}%`}</td>
+            <td>${row.yoyPct === null || row.yoyPct === undefined ? "—" : `${fmt(row.yoyPct, 1)}%`}</td>
+            <td>${row.date}</td>
+            <td>${metric.source}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+    document.querySelectorAll("tbody tr[data-product]").forEach(row => {
+      row.addEventListener("click", () => {
+        state.product = row.dataset.product;
+        render();
+      });
+    });
+  }
+
+  function renderTitles() {
+    const item = product();
+    document.getElementById("viewTag").textContent = modeLabel();
+    document.getElementById("viewTag").className = `tag ${state.mode}`;
+    document.getElementById("mainTitle").textContent = `${modeLabel()}核心指标`;
+    document.getElementById("mainKicker").textContent = state.mode === "compare"
+      ? "价格统一换算为元/kg；可比性以商品和环节口径为准"
+      : `${modeLabel()}视图展示最近有效价格、环比和同比`;
+    document.getElementById("tableKicker").textContent = `${item.label} 已选中，点击其他行可切换趋势图`;
+  }
+
+  function bind() {
+    document.querySelectorAll(".country-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.mode = btn.dataset.mode;
+        render();
+      });
+    });
+    window.addEventListener("resize", () => renderChart());
+  }
+
+  function render() {
+    setUrl();
+    renderShell();
+    renderTitles();
+    renderCards();
+    renderChart();
+    renderDetails();
+    renderTable();
+  }
+
+  bind();
+  render();
+})();
+</script>
+</body>
+</html>

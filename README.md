@@ -1,70 +1,106 @@
-# USDA 价格自动定时抓取（GitHub Actions）
+# 中美农业数据自动周报
 
-每周自动从 USDA NASS Quick Stats 拉取 7 个品类（牛/猪/奶/蛋/鸡/玉米/大豆）的"价格收到价"全国月度历史，
-存档原始 CSV，并生成带「元/公斤换算 + 环比 + 同比」的整理表，自动提交回仓库并发送邮件。无需电脑常开，免费。
+这个仓库每周一自动生成并邮件发送：
 
-## 一次性部署（约 5 分钟）
+- USDA NASS 农业数据 Excel
+- 农业农村部监测预警 Excel
+- 中美农业数据合并看板 zip
+- 看板所用 `dashboard-data.js`
 
-1. **建一个 GitHub 仓库**（私有即可），把本文件夹里的内容放进去，保持目录结构：
-   ```
-   fetch_usda.py
-   requirements.txt
-   .github/workflows/usda.yml
-   README.md
-   ```
+看板 zip 解压后直接打开 `中美农业数据监测看板.html`，不需要手动上传 Excel 或数据文件。
 
-2. **加 API key 和邮件配置到 Secrets**（不要把 key/密码写进代码或提交到仓库）：
-   仓库页 → Settings → Secrets and variables → Actions → New repository secret
-   - Name: `NASS_API_KEY`
-   - Secret: 你的 NASS key（即 `E089D28A-...`）
-   - Name: `SMTP_HOST`
-   - Secret: 邮箱 SMTP 服务器，例如 `smtp.qq.com` / `smtp.gmail.com`
-   - Name: `SMTP_PORT`
-   - Secret: SMTP 端口，通常 `587`，SSL 直连可用 `465`
-   - Name: `SMTP_USERNAME`
-   - Secret: 发件邮箱账号
-   - Name: `SMTP_PASSWORD`
-   - Secret: 发件邮箱的 SMTP 授权码/应用专用密码
-   - Name: `MAIL_TO`
-   - Secret: 收件邮箱
-   - Name: `MAIL_FROM`
-   - Secret: 发件邮箱（可选；不填时默认使用 `SMTP_USERNAME`）
+## 自动运行频率
 
-3. **确认 Actions 有写权限**：
-   Settings → Actions → General → Workflow permissions → 选 **Read and write permissions** → Save。
+GitHub Actions 默认每周一 `00:00 UTC` 运行，也就是北京时间周一早上 `08:00`。
 
-4. **跑一次验证**：
-   Actions 标签页 → 选 "USDA NASS 价格自动抓取" → 右侧 **Run workflow**（手动触发）。
-   成功后 `data/` 目录会出现：
-   - `data/raw/*.csv`（7 个原始存档，与手动下载同源）
-   - `data/USDA农业数据_YYYY-MM-DD_HHMM.xlsx`（含说明页 + 各品类整理表，时间为北京时间）
-   - `data/USDA农业数据_YYYY-MM-DD_HHMM_合并长表.csv`（所有品类合并的长表，便于做图/透视）
-   同时会向 `MAIL_TO` 发送邮件，附件包含整理后的 Excel 和合并长表 CSV。
+workflow 文件：
 
-## 定时频率
-
-默认 **每周一 00:00 UTC（北京时间周一 08:00 早上）**。
-NASS 月度数据每月更新一次，每周足够。要改频率，编辑 `.github/workflows/usda.yml` 里的 `cron`。
-（cron 用 UTC 时区。）
-
-## 换汇率
-
-`元/公斤` 列按汇率换算，默认 6.77。改 `usda.yml` 里 `FX_USD_CNY` 的值即可。
-
-## 口径提示（重要）
-
-- 这是**农场出售端价格收到价**（≈产业链上游/农场价），不是中国农业农村部那种县集贸**零售**价，两边不完全可比。
-- `元/公斤` 用**当前汇率**统一换算，仅为与中国现价对比；历史早期行不代表当年实际人民币价格。
-- boxed beef 分割肉批发价、屠宰量/胴重 NASS 没有，需另接 USDA Market News (MMN) API（另一个免费 key）。要加我再给你扩展脚本。
-
-## 本地先试（可选）
-
-```bash
-pip install -r requirements.txt
-NASS_API_KEY=你的key python fetch_usda.py
+```text
+.github/workflows/weekly-agri-monitor.yml
 ```
 
-## 数据来源
+## GitHub Secrets
 
-- NASS Quick Stats: https://quickstats.nass.usda.gov/
-- 官方月报 Agricultural Prices: https://usda.library.cornell.edu/concern/publications/c821gj76b
+仓库页进入：
+
+`Settings` → `Secrets and variables` → `Actions` → `New repository secret`
+
+需要配置：
+
+| Secret | 用途 |
+|---|---|
+| `NASS_API_KEY` | USDA NASS Quick Stats API key |
+| `SMTP_HOST` | 邮箱 SMTP 服务器，例如 `smtp.gmail.com` |
+| `SMTP_PORT` | SMTP 端口，通常 `587`；SSL 可用 `465` |
+| `SMTP_USERNAME` | 发件邮箱账号 |
+| `SMTP_PASSWORD` | 发件邮箱 SMTP 授权码/应用专用密码 |
+| `MAIL_TO` | 收件邮箱 |
+| `MAIL_FROM` | 发件邮箱，可选；不填默认使用 `SMTP_USERNAME` |
+
+还要确认：
+
+`Settings` → `Actions` → `General` → `Workflow permissions` 选择 `Read and write permissions`。
+
+## 输出文件
+
+USDA 数据会写入仓库 `data/`：
+
+```text
+data/USDA农业数据_YYYY-MM-DD_HHMM.xlsx
+data/USDA农业数据_YYYY-MM-DD_HHMM_合并长表.csv
+data/raw/*.csv
+```
+
+农业农村部历史基线会写入：
+
+```text
+data/moa/baseline_moa_jcyj_data.json
+```
+
+每周邮件附件包含：
+
+```text
+USDA农业数据_YYYY-MM-DD_HHMM.xlsx
+农业农村部监测预警数据汇总_YYYYMMDD_清洗版.xlsx
+中美农业数据监测看板.zip
+dashboard-data.js
+```
+
+## 本地测试
+
+```bash
+python -m pip install -r requirements.txt
+
+NASS_API_KEY=你的key python fetch_usda.py
+
+node scripts/scrape_moa_jcyj.mjs --out-dir=dist/moa --pages=1
+
+python scripts/merge_moa_data.py \
+  --baseline data/moa/baseline_moa_jcyj_data.json \
+  --latest dist/moa/moa_jcyj_data.json \
+  --output dist/moa/moa_jcyj_data_merged.json
+
+python scripts/build_moa_workbook.py \
+  --input dist/moa/moa_jcyj_data_merged.json \
+  --template templates/moa_chart_format_template.xlsx \
+  --output dist
+
+USDA_CSV="$(ls -1t data/USDA农业数据_*_合并长表.csv | head -n 1)"
+
+python scripts/build_china_us_agri_dashboard_data.py \
+  --moa-json dist/moa/moa_jcyj_data_merged.json \
+  --usda-csv "$USDA_CSV" \
+  --output dist/dashboard/data/dashboard-data.js
+
+python scripts/prepare_china_us_dashboard.py \
+  --template dashboard/中美农业数据监测看板.html \
+  --data dist/dashboard/data/dashboard-data.js \
+  --output-dir dist/dashboard \
+  --zip-name 中美农业数据监测看板.zip
+```
+
+## 数据来源口径
+
+- 中国：农业农村部畜牧兽医局监测预警，周度数据。
+- 美国：USDA NASS Quick Stats，月度 Price Received 数据。
+- 中美对比统一换算为元/kg，但不同国家的数据频率、采集环节和商品口径不同，看板中会标注可比性提示。
