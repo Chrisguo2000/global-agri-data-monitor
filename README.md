@@ -37,8 +37,8 @@
    Actions 标签页 → 选 "USDA NASS 价格自动抓取" → 右侧 **Run workflow**（手动触发）。
    成功后 `data/` 目录会出现：
    - `data/raw/*.csv`（7 个原始存档，与手动下载同源）
-   - `data/USDA畜牧饲料价格_自动更新.xlsx`（含说明页 + 各品类整理表）
-   - `data/USDA_价格_合并长表.csv`（所有品类合并的长表，便于做图/透视）
+   - `data/USDA农业数据_YYYY-MM-DD_HHMM.xlsx`（含说明页 + 各品类整理表，时间为北京时间）
+   - `data/USDA农业数据_YYYY-MM-DD_HHMM_合并长表.csv`（所有品类合并的长表，便于做图/透视）
    同时会向 `MAIL_TO` 发送邮件，附件包含整理后的 Excel 和合并长表 CSV。
 
 ## 定时频率

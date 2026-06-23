@@ -14,6 +14,8 @@ import datetime as dt
 import io
 import os
 import sys
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from openpyxl import Workbook
@@ -32,6 +34,7 @@ OUT_RAW = "data/raw"
 OUT_PROC = "data"
 os.makedirs(OUT_RAW, exist_ok=True)
 os.makedirs(OUT_PROC, exist_ok=True)
+OUTPUT_TIMEZONE = os.environ.get("OUTPUT_TIMEZONE", "Asia/Shanghai")
 
 BLUE = "1F4E78"
 GREY = "808080"
@@ -378,10 +381,25 @@ def build_workbook(wide_by_name: dict[str, pd.DataFrame], export_date: str):
     return wb
 
 
+def cleanup_previous_outputs():
+    output_dir = Path(OUT_PROC)
+    legacy_files = [
+        output_dir / "USDA畜牧饲料价格_自动更新.xlsx",
+        output_dir / "USDA_价格_合并长表.csv",
+    ]
+    dynamic_files = list(output_dir.glob("USDA农业数据_*.xlsx")) + list(output_dir.glob("USDA农业数据_*.csv"))
+    for file_path in legacy_files + dynamic_files:
+        if file_path.exists():
+            file_path.unlink()
+
+
 def main():
     now_utc = dt.datetime.now(dt.UTC)
-    stamp = now_utc.strftime("%Y-%m-%d %H:%M UTC")
-    export_date = now_utc.strftime("%Y-%m-%d")
+    now_local = now_utc.astimezone(ZoneInfo(OUTPUT_TIMEZONE))
+    stamp = now_local.strftime("%Y-%m-%d %H:%M %Z")
+    export_date = now_local.strftime("%Y-%m-%d")
+    output_stamp = now_local.strftime("%Y-%m-%d_%H%M")
+    output_base = f"USDA农业数据_{output_stamp}"
     wide_by_name = {}
     all_proc = []
     for name, cfg in CATS.items():
@@ -394,8 +412,13 @@ def main():
               f"最新 {wide['日期'].max().date()} = {wide[main_header].iloc[-1]} {cfg['unit']}")
 
     workbook = build_workbook(wide_by_name, export_date)
-    workbook.save(f"{OUT_PROC}/USDA畜牧饲料价格_自动更新.xlsx")
-    pd.concat(all_proc).to_csv(f"{OUT_PROC}/USDA_价格_合并长表.csv", index=False)
+    cleanup_previous_outputs()
+    xlsx_path = f"{OUT_PROC}/{output_base}.xlsx"
+    csv_path = f"{OUT_PROC}/{output_base}_合并长表.csv"
+    workbook.save(xlsx_path)
+    pd.concat(all_proc).to_csv(csv_path, index=False)
+    print(f"[OUTPUT] {xlsx_path}")
+    print(f"[OUTPUT] {csv_path}")
     print(f"[DONE] {stamp}")
 
 
