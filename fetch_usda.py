@@ -392,6 +392,8 @@ def cleanup_previous_outputs():
         + list(output_dir.glob("USDA农业数据_*.csv"))
         + list(output_dir.glob("美国USDA农业数据_*.xlsx"))
         + list(output_dir.glob("美国USDA农业数据_*.csv"))
+        + list(output_dir.glob("【美国】农业数据_*.xlsx"))
+        + list(output_dir.glob("【美国】农业数据_*.csv"))
     )
     for file_path in legacy_files + dynamic_files:
         if file_path.exists():
@@ -403,8 +405,7 @@ def main():
     now_local = now_utc.astimezone(ZoneInfo(OUTPUT_TIMEZONE))
     stamp = now_local.strftime("%Y-%m-%d %H:%M %Z")
     export_date = now_local.strftime("%Y-%m-%d")
-    output_stamp = now_local.strftime("%Y-%m-%d_%H%M")
-    output_base = f"美国USDA农业数据_{output_stamp}"
+    output_base = f"【美国】农业数据_{export_date}"
     wide_by_name = {}
     all_proc = []
     for name, cfg in CATS.items():

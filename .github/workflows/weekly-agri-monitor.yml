@@ -65,9 +65,9 @@ jobs:
 
       - name: 汇总本次输出路径
         run: |
-          US_XLSX="$(ls -1t data/美国USDA农业数据_*.xlsx | head -n 1)"
-          US_CSV="$(ls -1t data/美国USDA农业数据_*_合并长表.csv | head -n 1)"
-          CN_XLSX="$(ls -1t dist/中国农业农村部监测预警数据汇总_*_清洗版.xlsx | head -n 1)"
+          US_XLSX="$(ls -1t data/【美国】农业数据_*.xlsx | head -n 1)"
+          US_CSV="$(ls -1t data/【美国】农业数据_*_合并长表.csv | head -n 1)"
+          CN_XLSX="$(ls -1t dist/【中国】农业数据_*.xlsx | head -n 1)"
           AU_CSV="$(ls -1t data/澳洲农业数据_*_合并长表.csv | head -n 1)"
           for file in "$US_XLSX" "$US_CSV" "$CN_XLSX" "$AU_CSV" dist/moa/moa_jcyj_data_merged.json; do
             if [ -z "$file" ] || [ ! -f "$file" ]; then
@@ -85,7 +85,7 @@ jobs:
           python scripts/build_australia_workbook.py \
             --input "$AU_CSV" \
             --output-dir dist
-          AU_XLSX="$(ls -1t dist/澳洲农业数据_*.xlsx | head -n 1)"
+          AU_XLSX="$(ls -1t dist/【澳洲】农业数据_*.xlsx | head -n 1)"
           if [ -z "$AU_XLSX" ] || [ ! -f "$AU_XLSX" ]; then
             echo "::error::缺少澳洲 Excel 输出"
             exit 1
@@ -159,8 +159,8 @@ jobs:
         with:
           name: weekly-agri-monitor-output
           path: |
-            data/美国USDA农业数据_*.xlsx
-            data/美国USDA农业数据_*_合并长表.csv
+            data/【美国】农业数据_*.xlsx
+            data/【美国】农业数据_*_合并长表.csv
             data/澳洲农业数据_*_合并长表.csv
             dist/*.xlsx
             dist/*.zip
