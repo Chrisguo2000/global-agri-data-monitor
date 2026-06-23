@@ -38,3 +38,17 @@ jobs:
           git add data/
           git diff --staged --quiet || git commit -m "数据自动更新 $(date -u '+%Y-%m-%d')"
           git push
+
+      - name: 发送邮件
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: |
+          python scripts/send_email.py \
+            --subject "USDA NASS 畜牧饲料价格自动周报" \
+            --body "您好，附件为本周自动抓取并整理的 USDA NASS 畜牧饲料价格数据。Excel 包含说明页和各品类整理表，CSV 为所有品类合并长表；原始 CSV 已同步存档在仓库 data/raw/ 目录。" \
+            --attachments "data/USDA畜牧饲料价格_自动更新.xlsx" "data/USDA_价格_合并长表.csv"

@@ -1,7 +1,7 @@
 # USDA 价格自动定时抓取（GitHub Actions）
 
 每周自动从 USDA NASS Quick Stats 拉取 7 个品类（牛/猪/奶/蛋/鸡/玉米/大豆）的"价格收到价"全国月度历史，
-存档原始 CSV，并生成带「元/公斤换算 + 环比 + 同比」的整理表，自动提交回仓库。无需电脑常开，免费。
+存档原始 CSV，并生成带「元/公斤换算 + 环比 + 同比」的整理表，自动提交回仓库并发送邮件。无需电脑常开，免费。
 
 ## 一次性部署（约 5 分钟）
 
@@ -13,10 +13,22 @@
    README.md
    ```
 
-2. **加 API key 到 Secrets**（不要把 key 写进代码或提交到仓库）：
+2. **加 API key 和邮件配置到 Secrets**（不要把 key/密码写进代码或提交到仓库）：
    仓库页 → Settings → Secrets and variables → Actions → New repository secret
    - Name: `NASS_API_KEY`
    - Secret: 你的 NASS key（即 `E089D28A-...`）
+   - Name: `SMTP_HOST`
+   - Secret: 邮箱 SMTP 服务器，例如 `smtp.qq.com` / `smtp.gmail.com`
+   - Name: `SMTP_PORT`
+   - Secret: SMTP 端口，通常 `587`，SSL 直连可用 `465`
+   - Name: `SMTP_USERNAME`
+   - Secret: 发件邮箱账号
+   - Name: `SMTP_PASSWORD`
+   - Secret: 发件邮箱的 SMTP 授权码/应用专用密码
+   - Name: `MAIL_TO`
+   - Secret: 收件邮箱
+   - Name: `MAIL_FROM`
+   - Secret: 发件邮箱（可选；不填时默认使用 `SMTP_USERNAME`）
 
 3. **确认 Actions 有写权限**：
    Settings → Actions → General → Workflow permissions → 选 **Read and write permissions** → Save。
@@ -27,6 +39,7 @@
    - `data/raw/*.csv`（7 个原始存档，与手动下载同源）
    - `data/USDA畜牧饲料价格_自动更新.xlsx`（含说明页 + 各品类整理表）
    - `data/USDA_价格_合并长表.csv`（所有品类合并的长表，便于做图/透视）
+   同时会向 `MAIL_TO` 发送邮件，附件包含整理后的 Excel 和合并长表 CSV。
 
 ## 定时频率
 
