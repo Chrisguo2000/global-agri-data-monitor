@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs = require("node:fs/promises");
+const fsSync = require("node:fs");
 const path = require("node:path");
 
 function loadPlaywright() {
@@ -32,13 +33,21 @@ function parseArgs(argv) {
   return { mode, targetUrl, outputPath };
 }
 
-function launchOptions(chromium) {
+function launchOptions() {
   const opts = {
     headless: true,
     args: ["--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"],
   };
-  const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-  if (process.platform === "darwin") {
+  const candidates = [
+    process.env.CHROME_PATH,
+    process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+  ].filter(Boolean);
+  const chromePath = candidates.find((candidate) => fsSync.existsSync(candidate));
+  if (chromePath) {
     opts.executablePath = chromePath;
   }
   return opts;

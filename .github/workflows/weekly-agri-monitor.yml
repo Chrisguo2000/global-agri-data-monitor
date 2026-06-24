@@ -32,10 +32,24 @@ jobs:
         with:
           node-version: "24"
 
-      - name: 安装 Playwright 浏览器
+      - name: 安装 Playwright 并检测 Chrome
         run: |
-          npm install --no-save playwright@1.56.1
-          npx playwright install --with-deps chromium
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright@1.56.1
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "CHROME_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+            google-chrome --version
+          elif command -v google-chrome-stable >/dev/null 2>&1; then
+            echo "CHROME_PATH=$(command -v google-chrome-stable)" >> "$GITHUB_ENV"
+            google-chrome-stable --version
+          elif command -v chromium-browser >/dev/null 2>&1; then
+            echo "CHROME_PATH=$(command -v chromium-browser)" >> "$GITHUB_ENV"
+            chromium-browser --version
+          elif command -v chromium >/dev/null 2>&1; then
+            echo "CHROME_PATH=$(command -v chromium)" >> "$GITHUB_ENV"
+            chromium --version
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: 安装 Python
         uses: actions/setup-python@v5
