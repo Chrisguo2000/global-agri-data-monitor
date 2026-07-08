@@ -79,6 +79,19 @@ def month_start(values):
     return pd.to_datetime(values).dt.to_period("M").dt.to_timestamp()
 
 
+def current_month_start():
+    now = dt.datetime.now(dt.UTC).astimezone(ZoneInfo(OUTPUT_TIMEZONE))
+    return pd.Timestamp(year=now.year, month=now.month, day=1)
+
+
+def drop_current_incomplete_month(df, month_col="月份"):
+    if df.empty or month_col not in df.columns:
+        return df
+    out = df.copy()
+    out[month_col] = pd.to_datetime(out[month_col], errors="coerce")
+    return out[out[month_col] < current_month_start()].reset_index(drop=True)
+
+
 def request_text(client, url):
     response = client.get(url, timeout=90)
     response.raise_for_status()
@@ -134,9 +147,13 @@ def filename_for_url(url):
 def run_mla_exports(raw_dir, full_history):
     node = os.environ.get("NODE_BINARY") or "node"
     tool = ROOT / "tools/export_mla_powerbi.cjs"
-    mode = "--all-dates" if full_history else "--current"
     outputs = {}
     for name, (url, relative_out) in MLA_REPORTS.items():
+        # The report default/current window can export dense calendar rows for
+        # EYCI/NYCI, including non-report carry-forward dates. The all-dates
+        # visual export keeps the sparse MLA report-observation grain used by
+        # the historical database and is small enough to refresh every run.
+        mode = "--all-dates"
         out_path = raw_dir / relative_out
         out_path.parent.mkdir(parents=True, exist_ok=True)
         command = [node, str(tool), mode, url, str(out_path)]
@@ -234,11 +251,27 @@ def read_young_cattle(path, value_col, label, head_label):
     df = read_exported_csv(path)
     df["日期"] = pd.to_datetime(df["Date"])
     df["月份"] = month_start(df["日期"])
+    monthly_counts = df.groupby("月份")["日期"].size()
+    dense_months = monthly_counts[monthly_counts > 18]
+    if not dense_months.empty:
+        months = ", ".join(month.strftime("%Y-%m") for month in dense_months.index[:6])
+        raise RuntimeError(
+            f"{path} contains dense calendar rows for young-cattle indicators ({months}); "
+            "export MLA with --all-dates before monthly aggregation."
+        )
     value = pd.to_numeric(df[value_col], errors="coerce")
     head = pd.to_numeric(df["Head Count"], errors="coerce")
     avg_head = pd.to_numeric(df["Average Price ($/Head)"], errors="coerce")
-    out = pd.DataFrame({"月份": df["月份"], label: value, head_label: head, f"{label}($/Head)": avg_head})
-    return out.groupby("月份", as_index=False).agg({label: "mean", head_label: "sum", f"{label}($/Head)": "mean"})
+    out = pd.DataFrame(
+        {
+            "月份": df["月份"],
+            label: value,
+            head_label: head,
+            f"{label}($/Head)": avg_head,
+        }
+    )
+    monthly = out.groupby("月份", as_index=False).agg({label: "mean", head_label: "sum", f"{label}($/Head)": "mean"})
+    return drop_current_incomplete_month(monthly)
 
 
 def read_mla_weekly_indicators(path):
@@ -255,7 +288,7 @@ def read_mla_weekly_indicators(path):
         .rename(columns=keep)
         .reset_index()
     )
-    return wide
+    return drop_current_incomplete_month(wide)
 
 
 def read_abs_total_series(raw_dir, file_name, label):
@@ -372,7 +405,7 @@ def read_pork_prices(pdfs):
         return pd.DataFrame(columns=["月份"])
     df = pd.DataFrame(records).drop_duplicates("日期").sort_values("日期")
     df["月份"] = month_start(df["日期"])
-    return (
+    monthly = (
         df.groupby("月份", as_index=False)
         .agg(
             {
@@ -383,6 +416,7 @@ def read_pork_prices(pdfs):
         )
         .sort_values("月份")
     )
+    return drop_current_incomplete_month(monthly)
 
 
 def read_feed_grain_prices(pdfs):
@@ -392,7 +426,8 @@ def read_feed_grain_prices(pdfs):
     df = pd.DataFrame(records).drop_duplicates("日期").sort_values("日期")
     df["月份"] = month_start(df["日期"])
     value_columns = [label for label in FEED_GRAIN_LABELS.values() if label in df.columns]
-    return df.groupby("月份", as_index=False).agg({column: "mean" for column in value_columns}).sort_values("月份")
+    monthly = df.groupby("月份", as_index=False).agg({column: "mean" for column in value_columns}).sort_values("月份")
+    return drop_current_incomplete_month(monthly)
 
 
 def merge_monthly(frames):
@@ -485,16 +520,18 @@ def find_latest_australia_csv(output_dir):
 
 def merge_with_baseline(current, baseline_path):
     if not baseline_path or not baseline_path.exists():
-        return current
+        return drop_current_incomplete_month(current.rename(columns={"日期": "月份"})).rename(columns={"月份": "日期"})
     baseline = pd.read_csv(baseline_path, encoding="utf-8-sig")
     expected = {"品类", "指标", "日期", "数值"}
     if not expected.issubset(baseline.columns):
         raise RuntimeError(f"澳洲 baseline CSV 字段不完整: {baseline_path}")
     baseline = baseline[["品类", "指标", "日期", "数值"]].copy()
     combined = pd.concat([baseline, current], ignore_index=True)
-    combined["日期"] = pd.to_datetime(combined["日期"], errors="coerce").dt.strftime("%Y-%m-%d")
+    combined["日期"] = pd.to_datetime(combined["日期"], errors="coerce")
     combined["数值"] = pd.to_numeric(combined["数值"], errors="coerce")
     combined = combined.dropna(subset=["日期", "数值"])
+    combined = combined[combined["日期"] < current_month_start()]
+    combined["日期"] = combined["日期"].dt.strftime("%Y-%m-%d")
     combined = combined.drop_duplicates(["品类", "指标", "日期"], keep="last")
     return combined.sort_values(["品类", "指标", "日期"]).reset_index(drop=True)
 

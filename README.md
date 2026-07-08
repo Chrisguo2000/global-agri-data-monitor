@@ -116,5 +116,5 @@ python scripts/prepare_china_us_dashboard.py \
 
 - 中国：农业农村部畜牧兽医局监测预警，周度数据。
 - 美国：USDA NASS Quick Stats，月度 Price Received 数据。
-- 澳洲：每周实时抓取 MLA/NLRS、Australian Pork/ProFarmer、ABS CPI 与 ABS Livestock Products 公开数据；默认以上一版 `data/澳洲农业数据_*_合并长表.csv` 为 baseline，只抓 MLA 当前窗口、最新若干期 Australian Pork PDF 和最新 ABS 表后合并覆盖更新。若仓库没有 baseline，则自动全量初始化。
+- 澳洲：每周实时抓取 MLA/NLRS、Australian Pork/ProFarmer、ABS CPI 与 ABS Livestock Products 公开数据；默认以上一版 `data/澳洲农业数据_*_合并长表.csv` 为 baseline，每次刷新 MLA all-dates 报告点、最新若干期 Australian Pork PDF 和最新 ABS 表后合并覆盖更新。若仓库没有 baseline，则自动全量初始化。日度/周度来源聚合为月度时只输出完整月份；当前未完月不写入长表，避免与完整月直接环比。MLA EYCI/NYCI 成交头数使用 all-dates 报告点口径按月汇总，默认日历窗口导出的延续行不参与月度汇总。
 - 单国视图保留各自原始单位；各国对比只展示同商品、同价格口径可进入比较的国家，并统一换算为元/kg。

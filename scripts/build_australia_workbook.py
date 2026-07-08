@@ -34,7 +34,7 @@ EXCLUDED_INDICATORS = {"猪价周变化(c/kg)"}
 SHEET_SPECS = {
     "牛": (
         "牛 — 价格、成交头数、屠宰量与产量（月度统一）",
-        "价格为月均；屠宰/产量为季度月份值；主指标为 EYCI 月均。",
+        "价格为完整月月均；MLA成交头数使用all-dates报告点口径按完整月汇总；屠宰/产量为季度月份值；主指标为 EYCI 月均。",
         "EYCI月均(c/kg cwt)",
         "cents_to_rmb_kg",
     ),
@@ -153,7 +153,7 @@ def write_info_sheet(wb: Workbook, summaries: list[dict], export_date: str, sour
         ["可调参数", None, None],
         ["澳元兑人民币汇率", AUD_CNY, "用于澳洲 c/kg 与 A$/t 的统一人民币口径换算。"],
         [None, None, None],
-        ["时间口径", "月度", "日度/周度价格取月均；ABS 季度屠宰/产量只在季度月份填值；CPI 为月度指数。"],
+        ["时间口径", "月度", "日度/周度价格取完整月月均；MLA成交头数使用all-dates报告点口径按完整月汇总，默认日历窗口导出的延续行不参与；当前未完月不输出，避免与完整月直接环比。ABS 季度屠宰/产量只在季度月份填值；CPI 为月度指数。"],
         ["口径提醒", None, "牛/猪/饲料价格多为生产端或行业报价；鸡/鸡蛋/牛奶当前使用 ABS CPI 零售价格指数，不与生产端价格直接比较。"],
         [None, None, None],
         ["各Sheet概览", None, None],
