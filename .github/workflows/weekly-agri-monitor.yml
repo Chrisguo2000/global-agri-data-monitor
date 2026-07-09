@@ -83,6 +83,11 @@ jobs:
             --output dist
 
       - name: 抓取澳洲公开数据
+        env:
+          AUSTRALIA_MLA_API_FROM_DATE: "2024-01-01"
+          AUSTRALIA_MLA_HIGH_VOLUME_FROM_DATE: "2024-01-01"
+          AUSTRALIA_MLA_API_WORKERS: "8"
+          AUSTRALIA_PORK_MAX_PDFS: "16"
         run: python scripts/fetch_australia.py --output-dir data
 
       - name: 汇总本次输出路径
