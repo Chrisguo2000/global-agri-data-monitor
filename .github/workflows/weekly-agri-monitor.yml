@@ -84,9 +84,10 @@ jobs:
 
       - name: 抓取澳洲公开数据
         env:
-          AUSTRALIA_MLA_API_FROM_DATE: "2024-01-01"
-          AUSTRALIA_MLA_HIGH_VOLUME_FROM_DATE: "2024-01-01"
-          AUSTRALIA_MLA_API_WORKERS: "8"
+          AUSTRALIA_MLA_INCREMENTAL_LOOKBACK_MONTHS: "18"
+          AUSTRALIA_MLA_API_WORKERS: "4"
+          AUSTRALIA_MLA_API_RETRY_ATTEMPTS: "6"
+          AUSTRALIA_MLA_API_RETRY_SECONDS: "3"
           AUSTRALIA_PORK_MAX_PDFS: "16"
         run: python scripts/fetch_australia.py --output-dir data
 

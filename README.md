@@ -117,5 +117,5 @@ python scripts/prepare_china_us_dashboard.py \
 - 中国：农业农村部畜牧兽医局监测预警，周度数据。
 - 美国：USDA NASS Quick Stats，月度 Price Received 数据。
 - 澳洲：每周实时抓取 MLA/NLRS、MLA Statistics API、可导出的 MLA PowerBI 报表、Australian Pork/ProFarmer、ABS CPI 与 ABS Livestock Products 公开数据；默认以上一版 `data/澳洲农业数据_*_合并长表.csv` 为 baseline，每次刷新 MLA all-dates 报告点、MLA Statistics 公开 API、澳洲零售肉价 PowerBI、最新若干期 Australian Pork PDF 和最新 ABS 表后合并覆盖更新。若仓库没有 baseline，则自动全量初始化。日度/周度来源聚合为月度时只输出完整月份；当前未完月不写入长表，避免与完整月直接环比。MLA EYCI/NYCI 成交头数使用 all-dates 报告点口径按月汇总，默认日历窗口导出的延续行不参与月度汇总；MLA Statistics API 的高频 saleyard/州级明细默认聚合到月度或全国层级后进入看板，不自动参与跨国价格对比。
-- 澳洲抓取可通过 `AUSTRALIA_MLA_API_FROM_DATE`、`AUSTRALIA_MLA_HIGH_VOLUME_FROM_DATE`、`AUSTRALIA_MLA_API_WORKERS` 和 `AUSTRALIA_PORK_MAX_PDFS` 临时调整 API 起始日期、日频高量接口起始日期、分页并发数和 Australian Pork PDF 数量。
+- 澳洲抓取有 baseline 时默认按上一版长表最新日期往前回看 18 个月刷新，合并时以 `国家+品类+指标+日期` 覆盖旧值；没有 baseline 或传 `--full-history` 时才全量初始化。可通过 `AUSTRALIA_MLA_INCREMENTAL_LOOKBACK_MONTHS` 调整回看月数，也可用 `AUSTRALIA_MLA_API_FROM_DATE`、`AUSTRALIA_MLA_HIGH_VOLUME_FROM_DATE` 强制指定 API 起始日期，并通过 `AUSTRALIA_MLA_API_WORKERS`、`AUSTRALIA_MLA_API_RETRY_ATTEMPTS`、`AUSTRALIA_MLA_API_RETRY_SECONDS` 和 `AUSTRALIA_PORK_MAX_PDFS` 调整分页并发、失败重试和 Australian Pork PDF 数量。
 - 单国视图保留各自原始单位；各国对比只展示同商品、同价格口径可进入比较的国家，并统一换算为元/kg。

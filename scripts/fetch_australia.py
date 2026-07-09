@@ -42,10 +42,15 @@ ABS_LIVESTOCK_URL = "https://www.abs.gov.au/statistics/industry/agriculture/live
 ABS_CPI_URL = "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/consumer-price-index-australia/latest-release"
 PORK_REPORTS_URL = "https://australianpork.com.au/market-reports/eyes-and-ears-reports"
 MLA_STATS_API_BASE = "https://api-mlastatistics.mla.com.au"
-MLA_STATS_API_FROM_DATE = os.environ.get("AUSTRALIA_MLA_API_FROM_DATE", "2000-01-01")
-MLA_STATS_API_HIGH_VOLUME_FROM_DATE = os.environ.get("AUSTRALIA_MLA_HIGH_VOLUME_FROM_DATE", "2021-01-01")
+MLA_STATS_API_DEFAULT_FROM_DATE = "2000-01-01"
+MLA_STATS_API_DEFAULT_HIGH_VOLUME_FROM_DATE = "2021-01-01"
+MLA_STATS_API_INCREMENTAL_LOOKBACK_MONTHS = max(
+    0,
+    int(os.environ.get("AUSTRALIA_MLA_INCREMENTAL_LOOKBACK_MONTHS", "18") or "18"),
+)
 MLA_STATS_API_PAGE_SIZE = 100
-MLA_STATS_API_RETRY_SECONDS = 2
+MLA_STATS_API_RETRY_ATTEMPTS = max(1, int(os.environ.get("AUSTRALIA_MLA_API_RETRY_ATTEMPTS", "6") or "6"))
+MLA_STATS_API_RETRY_SECONDS = max(1, int(os.environ.get("AUSTRALIA_MLA_API_RETRY_SECONDS", "3") or "3"))
 MLA_STATS_API_WORKERS = max(1, int(os.environ.get("AUSTRALIA_MLA_API_WORKERS", "4") or "4"))
 
 try:
@@ -143,6 +148,45 @@ def financial_year_to_date(value):
     if end_year < start_year:
         end_year += 100
     return pd.Timestamp(year=end_year, month=6, day=30)
+
+
+def format_date(value):
+    return pd.Timestamp(value).strftime("%Y-%m-%d")
+
+
+def baseline_incremental_start_date(baseline_path):
+    if not baseline_path or not baseline_path.exists():
+        return None
+    try:
+        baseline = pd.read_csv(baseline_path, encoding="utf-8-sig", usecols=["日期"])
+    except Exception as exc:
+        print(f"[BASELINE WARN] cannot read baseline dates from {baseline_path}: {exc}", file=sys.stderr)
+        return None
+    dates = pd.to_datetime(baseline["日期"], errors="coerce").dropna()
+    if dates.empty:
+        return None
+    latest = dates.max().to_period("M").to_timestamp()
+    start = latest - pd.DateOffset(months=MLA_STATS_API_INCREMENTAL_LOOKBACK_MONTHS)
+    return format_date(start)
+
+
+def resolve_mla_api_windows(baseline_path, full_history):
+    env_from = os.environ.get("AUSTRALIA_MLA_API_FROM_DATE")
+    env_high_volume_from = os.environ.get("AUSTRALIA_MLA_HIGH_VOLUME_FROM_DATE")
+    incremental_start = None if full_history else baseline_incremental_start_date(baseline_path)
+    api_from_date = env_from or incremental_start or MLA_STATS_API_DEFAULT_FROM_DATE
+    high_volume_from_date = (
+        env_high_volume_from
+        or incremental_start
+        or MLA_STATS_API_DEFAULT_HIGH_VOLUME_FROM_DATE
+    )
+    print(
+        "[MLA API WINDOW] "
+        f"api_from={api_from_date}; high_volume_from={high_volume_from_date}; "
+        f"lookback_months={MLA_STATS_API_INCREMENTAL_LOOKBACK_MONTHS}; "
+        f"env_override={bool(env_from or env_high_volume_from)}"
+    )
+    return api_from_date, high_volume_from_date
 
 
 def session():
@@ -338,7 +382,7 @@ def mla_api_get(client, endpoint, params=None):
     url = f"{MLA_STATS_API_BASE}{endpoint}"
     params = {key: value for key, value in (params or {}).items() if value not in (None, "", [])}
     last_error = None
-    for attempt in range(3):
+    for attempt in range(MLA_STATS_API_RETRY_ATTEMPTS):
         try:
             response = client.get(url, params=params, timeout=120)
             response.raise_for_status()
@@ -348,8 +392,14 @@ def mla_api_get(client, endpoint, params=None):
             return payload
         except Exception as exc:
             last_error = exc
-            if attempt < 2:
-                time.sleep(MLA_STATS_API_RETRY_SECONDS)
+            if attempt < MLA_STATS_API_RETRY_ATTEMPTS - 1:
+                wait = min(60, MLA_STATS_API_RETRY_SECONDS * (2 ** attempt))
+                print(
+                    f"[MLA API RETRY] {endpoint} {params}: {exc}; "
+                    f"retry {attempt + 2}/{MLA_STATS_API_RETRY_ATTEMPTS} in {wait}s",
+                    file=sys.stderr,
+                )
+                time.sleep(wait)
     raise RuntimeError(f"MLA Statistics API failed: {endpoint} {params}: {last_error}")
 
 
@@ -415,7 +465,7 @@ def fetch_mla_api_dataset(client, raw_dir, name, endpoint, params=None):
     return records
 
 
-def fetch_mla_stats_api_raw(client, raw_dir):
+def fetch_mla_stats_api_raw(client, raw_dir, api_from_date, high_volume_from_date):
     data = {}
     data["report_list"] = fetch_mla_api_dataset(client, raw_dir, "report_list", "/report")
     indicators = fetch_mla_api_dataset(client, raw_dir, "indicator_list", "/indicator")
@@ -427,12 +477,13 @@ def fetch_mla_stats_api_raw(client, raw_dir):
         raw_dir,
         "report_1_exports",
         "/report/1",
-        {"fromDate": MLA_STATS_API_FROM_DATE},
+        {"fromDate": api_from_date},
     )
 
     herd_records = []
     current_year = dt.datetime.now(dt.UTC).astimezone(ZoneInfo(OUTPUT_TIMEZONE)).year
-    for year in range(2000, current_year + 1):
+    herd_start_year = max(2000, pd.Timestamp(api_from_date).year - 1)
+    for year in range(herd_start_year, current_year + 1):
         try:
             herd_records.extend(
                 fetch_mla_api_dataset(
@@ -452,7 +503,7 @@ def fetch_mla_stats_api_raw(client, raw_dir):
         raw_dir,
         "report_3_slaughter_production",
         "/report/3",
-        {"fromDate": MLA_STATS_API_FROM_DATE},
+        {"fromDate": api_from_date},
     )
 
     yarding_records = []
@@ -463,7 +514,7 @@ def fetch_mla_stats_api_raw(client, raw_dir):
                 raw_dir,
                 f"report_4_yardings_{category.lower()}",
                 "/report/4",
-                {"fromDate": MLA_STATS_API_HIGH_VOLUME_FROM_DATE, "category": category},
+                {"fromDate": high_volume_from_date, "category": category},
             )
         )
     data["report_4_yardings"] = yarding_records
@@ -479,7 +530,7 @@ def fetch_mla_stats_api_raw(client, raw_dir):
                 raw_dir,
                 f"report_5_indicator_{indicator_id}",
                 "/report/5",
-                {"fromDate": MLA_STATS_API_HIGH_VOLUME_FROM_DATE, "indicatorID": indicator_id},
+                {"fromDate": high_volume_from_date, "indicatorID": indicator_id},
             )
         )
     data["report_5_indicators"] = indicator_records
@@ -492,7 +543,7 @@ def fetch_mla_stats_api_raw(client, raw_dir):
                 raw_dir,
                 f"report_7_global_cattle_{country.lower()}",
                 "/report/7",
-                {"fromDate": MLA_STATS_API_FROM_DATE, "countryID": country},
+                {"fromDate": api_from_date, "countryID": country},
             )
         )
     data["report_7_global_cattle"] = global_cattle_records
@@ -502,21 +553,21 @@ def fetch_mla_stats_api_raw(client, raw_dir):
         raw_dir,
         "report_8_us_domestic_cattle",
         "/report/8",
-        {"fromDate": MLA_STATS_API_FROM_DATE},
+        {"fromDate": api_from_date},
     )
     data["report_9_us_imported_beef"] = fetch_mla_api_dataset(
         client,
         raw_dir,
         "report_9_us_imported_beef",
         "/report/9",
-        {"fromDate": MLA_STATS_API_FROM_DATE},
+        {"fromDate": api_from_date},
     )
     data["report_10_nlrs_slaughter"] = fetch_mla_api_dataset(
         client,
         raw_dir,
         "report_10_nlrs_slaughter",
         "/report/10",
-        {"fromDate": MLA_STATS_API_HIGH_VOLUME_FROM_DATE},
+        {"fromDate": high_volume_from_date},
     )
     return data
 
@@ -1205,9 +1256,10 @@ def main():
 
     client = session()
     if not args.skip_download:
+        api_from_date, high_volume_from_date = resolve_mla_api_windows(baseline_path, full_history)
         run_mla_exports(raw_dir, full_history)
         run_mla_powerbi_exports(raw_dir)
-        mla_api_data = fetch_mla_stats_api_raw(client, raw_dir)
+        mla_api_data = fetch_mla_stats_api_raw(client, raw_dir, api_from_date, high_volume_from_date)
         download_abs_tables(client, raw_dir)
         pdfs = download_pork_reports(client, raw_dir, pork_max_pdfs)
     else:
