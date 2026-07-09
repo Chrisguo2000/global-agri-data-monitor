@@ -60,6 +60,7 @@ def normalize(text=""):
     text = compact(text)
     text = re.sub(r"\s*([，。；：、（）%])\s*", r"\1", text)
     text = re.sub(r"\s*/\s*", "/", text)
+    text = re.sub(r"(\d)\s*\.\s*(\d)", r"\1.\2", text)
     text = re.sub(r"(\d)\s+(\d)", r"\1\2", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()

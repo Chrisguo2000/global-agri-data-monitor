@@ -52,6 +52,7 @@ function normalizeSpacing(input = "") {
     .replace(/\s*([，。；：、（）%])\s*/g, "$1")
     .replace(/\s+([年月日周])/g, "$1")
     .replace(/([第月])\s+/g, "$1")
+    .replace(/(\d)\s*\.\s*(\d)/g, "$1.$2")
     .replace(/(\d)\s+(\d)/g, "$1$2")
     .replace(/\s+/g, " ")
     .trim();

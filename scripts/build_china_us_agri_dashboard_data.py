@@ -56,7 +56,7 @@ PRODUCTS = [
     },
     {
         "id": "hog",
-        "label": "生猪",
+        "label": "生猪/猪肉",
         "category": "畜肉",
         "chinaMetric": "china_hog",
         "usMetric": "us_hog",
@@ -64,6 +64,15 @@ PRODUCTS = [
         "comparisonMetrics": {"china": "china_hog", "us": "us_hog", "au": "au_hog_avg"},
         "comparability": "较可比",
         "caveat": "各国对比使用中国生猪、美国NASS生猪和澳洲Buyers NAT平均价的统一换算值；澳洲最高价、屠宰量和猪肉产量仅在澳洲单国视图保留原始口径。",
+    },
+    {
+        "id": "lamb",
+        "label": "羊肉/活羊",
+        "category": "畜肉",
+        "chinaMetric": "china_mutton",
+        "countryMetrics": {"china": "china_mutton"},
+        "comparability": "中国单国",
+        "caveat": "中国单国视图展示农业农村部集贸市场羊肉、主产省份羊肉和活羊价格；当前无同口径跨国价格对比。",
     },
     {
         "id": "milk",
@@ -78,25 +87,25 @@ PRODUCTS = [
     },
     {
         "id": "egg",
-        "label": "鸡蛋",
+        "label": "鸡蛋/蛋雏鸡",
         "category": "禽蛋",
         "chinaMetric": "china_egg",
         "usMetric": "us_egg",
         "countryMetrics": {"china": "china_egg", "us": "us_egg", "au": "au_egg_cpi"},
         "comparisonMetrics": {"china": "china_egg", "us": "us_egg"},
         "comparability": "方向参考",
-        "caveat": "各国对比只展示中美鸡蛋价格；澳洲当前为ABS Eggs CPI指数，不能与价格金额直接比较。",
+        "caveat": "各国对比只展示中美鸡蛋价格；中国单国视图同时展示全国鸡蛋、主产省份鸡蛋和商品代蛋雏鸡，澳洲当前为ABS Eggs CPI指数。",
     },
     {
         "id": "chicken",
-        "label": "鸡肉",
+        "label": "鸡肉/肉雏鸡",
         "category": "禽肉",
         "chinaMetric": "china_chicken",
         "usMetric": "us_chicken",
         "countryMetrics": {"china": "china_chicken", "us": "us_chicken", "au": "au_chicken_cpi"},
         "comparisonMetrics": {"china": "china_chicken", "us": "us_chicken"},
         "comparability": "方向参考",
-        "caveat": "各国对比只展示中美鸡肉价格；澳洲当前为ABS Poultry CPI指数，屠宰量和鸡肉产量只在澳洲单国视图展示。",
+        "caveat": "各国对比只展示中美鸡肉价格；中国单国视图同时展示全国鸡肉和商品代肉雏鸡，澳洲当前为ABS Poultry CPI指数。",
     },
     {
         "id": "corn",
@@ -124,23 +133,243 @@ PRODUCTS = [
         "id": "feed",
         "label": "饲料",
         "category": "饲料",
-        "countryMetrics": {"au": "au_feed_wheat"},
+        "chinaMetric": "china_fattening_hog_feed",
+        "countryMetrics": {"china": "china_fattening_hog_feed", "au": "au_feed_wheat"},
         "comparability": "澳洲单国",
-        "caveat": "澳洲饲料页集中展示豆粕、饲料小麦、饲料大麦、高粱、油菜粕、棉籽、小黑麦和饲料燕麦等Australian Pork/ProFarmer周报Delivered报价月均；当前中美看板无完全同组指标，作为澳洲单国趋势观察。",
+        "caveat": "中国单国视图展示育肥猪、肉鸡、蛋鸡配合饲料；澳洲饲料页展示豆粕、饲料小麦、饲料大麦、高粱、油菜粕、棉籽、小黑麦和饲料燕麦等Delivered报价月均。",
     },
 ]
 
 
+def compact_scope(value):
+    return "".join(str(value or "").split())
+
+
+def scope_is_national(row):
+    return compact_scope(row.get("scope")) == "全国"
+
+
 CHINA_METRIC_CONFIGS = [
-    ("china_beef", "beef", "牛肉", "牛肉", lambda row: row.get("scope") == "全国"),
-    ("china_live_cattle", "beef", "活牛", "活牛", lambda row: row.get("scope") != "全国"),
-    ("china_hog", "hog", "生猪", "生猪", lambda row: row.get("scope") == "全国"),
-    ("china_pork", "hog", "猪肉", "猪肉", lambda row: row.get("scope") == "全国"),
-    ("china_milk", "milk", "生鲜乳", "生鲜乳", lambda row: True),
-    ("china_egg", "egg", "鸡蛋", "鸡蛋", lambda row: row.get("scope") == "全国"),
-    ("china_chicken", "chicken", "鸡肉", "鸡肉", lambda row: row.get("scope") == "全国"),
-    ("china_corn", "corn", "玉米", "玉米", lambda row: row.get("scope") == "全国"),
-    ("china_soymeal", "soy", "豆粕", "豆粕", lambda row: row.get("scope") == "全国"),
+    {
+        "id": "china_beef",
+        "productId": "beef",
+        "label": "牛肉",
+        "item": "牛肉",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国牛肉平均价格。",
+    },
+    {
+        "id": "china_beef_main_provinces",
+        "productId": "beef",
+        "label": "主产省份牛肉",
+        "item": "牛肉",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: not scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》主产省份牛肉价格。",
+    },
+    {
+        "id": "china_live_cattle",
+        "productId": "beef",
+        "label": "活牛",
+        "item": "活牛",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: not scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》主产省份活牛价格。",
+    },
+    {
+        "id": "china_piglet",
+        "productId": "hog",
+        "label": "仔猪",
+        "item": "仔猪",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国仔猪平均价格。",
+    },
+    {
+        "id": "china_hog",
+        "productId": "hog",
+        "label": "生猪",
+        "item": "生猪",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国生猪平均价格。",
+    },
+    {
+        "id": "china_pork",
+        "productId": "hog",
+        "label": "猪肉",
+        "item": "猪肉",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国猪肉平均价格。",
+    },
+    {
+        "id": "china_mutton",
+        "productId": "lamb",
+        "label": "羊肉",
+        "item": "羊肉",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国羊肉平均价格。",
+    },
+    {
+        "id": "china_mutton_main_provinces",
+        "productId": "lamb",
+        "label": "主产省份羊肉",
+        "item": "羊肉",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: not scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》主产省份羊肉价格。",
+    },
+    {
+        "id": "china_live_sheep",
+        "productId": "lamb",
+        "label": "活羊",
+        "item": "活羊",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: not scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》主产省份活羊价格。",
+    },
+    {
+        "id": "china_milk",
+        "productId": "milk",
+        "label": "生鲜乳",
+        "item": "生鲜乳",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: True,
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》主产省份生鲜乳平均价格。",
+    },
+    {
+        "id": "china_egg",
+        "productId": "egg",
+        "label": "鸡蛋",
+        "item": "鸡蛋",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国鸡蛋平均价格。",
+    },
+    {
+        "id": "china_egg_main_provinces",
+        "productId": "egg",
+        "label": "主产省份鸡蛋",
+        "item": "鸡蛋",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: not scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》河北、辽宁等主产省份鸡蛋价格。",
+    },
+    {
+        "id": "china_layer_chick",
+        "productId": "egg",
+        "label": "商品代蛋雏鸡",
+        "item": "商品代蛋雏鸡",
+        "unit": "元/只",
+        "sourceUnit": "元/只",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国商品代蛋雏鸡平均价格。",
+    },
+    {
+        "id": "china_chicken",
+        "productId": "chicken",
+        "label": "鸡肉",
+        "item": "鸡肉",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国鸡肉平均价格。",
+    },
+    {
+        "id": "china_broiler_chick",
+        "productId": "chicken",
+        "label": "商品代肉雏鸡",
+        "item": "商品代肉雏鸡",
+        "unit": "元/只",
+        "sourceUnit": "元/只",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国商品代肉雏鸡平均价格。",
+    },
+    {
+        "id": "china_corn",
+        "productId": "corn",
+        "label": "玉米",
+        "item": "玉米",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国玉米平均价格。",
+    },
+    {
+        "id": "china_corn_northeast",
+        "productId": "corn",
+        "label": "玉米-主产区东北三省",
+        "item": "玉米",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: "主产区东北三省" in compact_scope(row.get("scope")),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》主产区东北三省玉米价格。",
+    },
+    {
+        "id": "china_corn_guangdong",
+        "productId": "corn",
+        "label": "玉米-主销区广东省",
+        "item": "玉米",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: "主销区广东省" in compact_scope(row.get("scope")),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》主销区广东省玉米价格。",
+    },
+    {
+        "id": "china_soymeal",
+        "productId": "soy",
+        "label": "豆粕",
+        "item": "豆粕",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国豆粕平均价格。",
+    },
+    {
+        "id": "china_fattening_hog_feed",
+        "productId": "feed",
+        "label": "育肥猪配合饲料",
+        "item": "育肥猪配合饲料",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国育肥猪配合饲料平均价格。",
+    },
+    {
+        "id": "china_broiler_feed",
+        "productId": "feed",
+        "label": "肉鸡配合饲料",
+        "item": "肉鸡配合饲料",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国肉鸡配合饲料平均价格。",
+    },
+    {
+        "id": "china_layer_feed",
+        "productId": "feed",
+        "label": "蛋鸡配合饲料",
+        "item": "蛋鸡配合饲料",
+        "unit": "元/kg",
+        "sourceUnit": "元/公斤",
+        "scope": lambda row: scope_is_national(row),
+        "note": "农业农村部畜牧兽医局《畜产品和饲料集贸市场价格情况》全国蛋鸡配合饲料平均价格。",
+    },
 ]
 
 
@@ -577,15 +806,29 @@ def build_china_metrics(moa_json):
         slaughter_rows.extend(parser.parse_slaughter_article(article))
 
     metrics = []
-    for metric_id, product_id, label, item, scope_pred in CHINA_METRIC_CONFIGS:
-        by_date = {}
+    for config in CHINA_METRIC_CONFIGS:
+        series = []
+        seen = set()
         for row in market_rows:
-            if row.get("item") != item or not scope_pred(row):
+            if row.get("item") != config["item"] or not config["scope"](row):
+                continue
+            if config.get("sourceUnit") and row.get("unit") != config["sourceUnit"]:
                 continue
             value = as_float(row.get("value"))
             if value is None:
                 continue
-            by_date[row["publishDate"]] = {
+            key = (
+                row.get("publishDate", ""),
+                row.get("period", ""),
+                row.get("collectionDate", ""),
+                row.get("scope", ""),
+                value,
+                row.get("unit", ""),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            series.append({
                 "date": row["publishDate"],
                 "period": row.get("period", ""),
                 "value": round(value, 3),
@@ -594,20 +837,21 @@ def build_china_metrics(moa_json):
                 "yoyPct": as_float(row.get("yoyPct")),
                 "scope": row.get("scope", ""),
                 "url": row.get("url", ""),
-            }
-        series = [by_date[date] for date in sorted(by_date)]
+                "originalUnit": row.get("unit", ""),
+            })
+        series.sort(key=lambda item: (item.get("date", ""), item.get("period", ""), item.get("scope", "")))
         metrics.append(
             build_metric(
-                metric_id,
+                config["id"],
                 "china",
-                product_id,
-                label,
-                "元/kg",
+                config["productId"],
+                config["label"],
+                config["unit"],
                 "周度",
                 "农业农村部畜牧兽医局监测预警",
                 series,
-                "集贸市场价格；优先取全国口径，活牛/生鲜乳等按可用主产区口径。",
-                "元/kg",
+                config["note"],
+                config.get("compareUnit", config["unit"]),
             )
         )
 
@@ -894,6 +1138,7 @@ def main():
             },
             "notes": [
                 "显示规则：除“各国对比”外，中国、美国、澳洲单国看板均展示各自数据源的原始口径和原始单位，例如美元/美制单位、澳元/澳分、指数、头数或吨。",
+                "中国说明：中国单国看板展示农业农村部《畜产品和饲料集贸市场价格情况》文章中可解析的全部价格字段，包括全国、主产省份、主产区和主销区等原始范围。",
                 "对比规则：“各国对比”只展示同商品、同价格口径可进入比较的国家，并使用统一换算后的元/kg；不能比较的国家不会进入该品类的对比图和对比卡片。",
                 "澳洲说明：澳洲NYCI、EYCI、成交头数、屠宰量、产量、CPI和饲料报价均纳入澳洲单国视图；其中CPI、成交头数、屠宰量和产量不进入价格对比。澳洲日度/周度来源只输出完整月份；MLA成交头数使用all-dates报告点口径，默认日历窗口导出的延续行不参与月度汇总。",
                 "环节差异：中国农业部多为周度集贸市场、主产省份或产销区监测价格；USDA NASS多为月度农场端Price Received；澳洲来自MLA、Australian Pork/ProFarmer和ABS CPI，环节差异需单独看口径提示。",
