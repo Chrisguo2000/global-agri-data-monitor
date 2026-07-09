@@ -29,7 +29,7 @@ THIN_BORDER = Border(
     bottom=Side(style="thin", color="9EADCC"),
 )
 
-CATEGORY_ORDER = ["牛", "猪", "鸡", "鸡蛋", "生鲜乳", "饲料"]
+CATEGORY_ORDER = ["牛", "猪", "羊", "鸡", "鸡蛋", "生鲜乳", "饲料", "其他"]
 EXCLUDED_INDICATORS = {"猪价周变化(c/kg)"}
 SHEET_SPECS = {
     "牛": (
@@ -118,7 +118,8 @@ def wide_by_category(data: pd.DataFrame):
     filtered = data[~data["指标"].isin(EXCLUDED_INDICATORS)].copy()
     filtered["日期"] = pd.to_datetime(filtered["日期"])
     filtered["数值"] = pd.to_numeric(filtered["数值"], errors="coerce")
-    for category in CATEGORY_ORDER:
+    category_order = CATEGORY_ORDER + sorted(set(filtered["品类"].dropna()) - set(CATEGORY_ORDER))
+    for category in category_order:
         part = filtered[filtered["品类"] == category]
         if part.empty:
             continue
@@ -147,13 +148,13 @@ def write_info_sheet(wb: Workbook, summaries: list[dict], export_date: str, sour
     ws.title = "参数与说明"
     rows = [
         ["澳洲农业数据 — 按品类月度口径", None, None],
-        ["数据来源：MLA/NLRS、Australian Pork/ProFarmer、ABS Livestock Products、ABS CPI", None, None],
+        ["数据来源：MLA/NLRS、MLA Statistics API、Australian Pork/ProFarmer、ABS Livestock Products、ABS CPI", None, None],
         [f"导出日期：{export_date}；来源文件：{source_file.name}", None, None],
         [None, None, None],
         ["可调参数", None, None],
         ["澳元兑人民币汇率", AUD_CNY, "用于澳洲 c/kg 与 A$/t 的统一人民币口径换算。"],
         [None, None, None],
-        ["时间口径", "月度", "日度/周度价格取完整月月均；MLA成交头数使用all-dates报告点口径按完整月汇总，默认日历窗口导出的延续行不参与；当前未完月不输出，避免与完整月直接环比。ABS 季度屠宰/产量只在季度月份填值；CPI 为月度指数。"],
+        ["时间口径", "月度", "日度/周度价格取完整月月均；MLA成交头数使用all-dates报告点口径按完整月汇总，默认日历窗口导出的延续行不参与；当前未完月不输出，避免与完整月直接环比。ABS 季度屠宰/产量只在季度月份填值；CPI 为月度指数；MLA Statistics高频明细默认聚合到月度。"],
         ["口径提醒", None, "牛/猪/饲料价格多为生产端或行业报价；鸡/鸡蛋/牛奶当前使用 ABS CPI 零售价格指数，不与生产端价格直接比较。"],
         [None, None, None],
         ["各Sheet概览", None, None],
@@ -175,7 +176,14 @@ def write_info_sheet(wb: Workbook, summaries: list[dict], export_date: str, sour
 
 
 def write_category_sheet(wb: Workbook, name: str, df: pd.DataFrame):
-    title, note, main_col, convert_kind = SHEET_SPECS[name]
+    if name in SHEET_SPECS:
+        title, note, main_col, convert_kind = SHEET_SPECS[name]
+    else:
+        value_columns = [column for column in df.columns if column not in {"日期", "年", "月"}]
+        main_col = value_columns[0] if value_columns else ""
+        title = f"{name} — MLA Statistics（月度统一）"
+        note = "MLA Statistics/API新增字段；保留原始单位，默认不做跨品类价格换算。"
+        convert_kind = None
     ws = wb.create_sheet(name)
     ws["A1"] = title
     ws["A2"] = note
@@ -249,7 +257,7 @@ def main():
         pass
     summaries = []
     write_info_sheet(wb, summaries, export_date, input_csv)
-    for category in CATEGORY_ORDER:
+    for category in list(CATEGORY_ORDER) + sorted(set(sheets) - set(CATEGORY_ORDER)):
         if category not in sheets:
             continue
         summaries.append(write_category_sheet(wb, category, sheets[category]))

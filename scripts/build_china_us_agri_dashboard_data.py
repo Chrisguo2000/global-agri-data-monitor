@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+import hashlib
 import importlib.util
 import json
 import os
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -137,6 +139,38 @@ PRODUCTS = [
         "countryMetrics": {"china": "china_fattening_hog_feed", "au": "au_feed_wheat"},
         "comparability": "澳洲单国",
         "caveat": "中国单国视图展示育肥猪、肉鸡、蛋鸡配合饲料；澳洲饲料页展示豆粕、饲料小麦、饲料大麦、高粱、油菜粕、棉籽、小黑麦和饲料燕麦等Delivered报价月均。",
+    },
+    {
+        "id": "goat",
+        "label": "山羊",
+        "category": "畜肉",
+        "countryMetrics": {},
+        "comparability": "单国视图",
+        "caveat": "MLA Statistics中山羊相关指标只在单国视图展示，不进入跨国价格对比。",
+    },
+    {
+        "id": "trade",
+        "label": "出口",
+        "category": "贸易",
+        "countryMetrics": {},
+        "comparability": "单国视图",
+        "caveat": "MLA出口数据按目的地和肉类分组展示数量，不与价格指标直接比较。",
+    },
+    {
+        "id": "herd",
+        "label": "畜群/存栏",
+        "category": "供给",
+        "countryMetrics": {},
+        "comparability": "单国视图",
+        "caveat": "MLA/ABS畜群和存栏数据为年度供给指标，不进入价格对比。",
+    },
+    {
+        "id": "other",
+        "label": "其他统计",
+        "category": "其他",
+        "countryMetrics": {},
+        "comparability": "单国视图",
+        "caveat": "未归入核心商品链条的MLA Statistics指标仅用于单国趋势观察。",
     },
 ]
 
@@ -719,6 +753,68 @@ AUSTRALIA_METRIC_CONFIGS = {
     },
 }
 
+AUSTRALIA_CATEGORY_PRODUCT = {
+    "牛": "beef",
+    "猪": "hog",
+    "羊": "lamb",
+    "山羊": "goat",
+    "鸡": "chicken",
+    "鸡蛋": "egg",
+    "生鲜乳": "milk",
+    "饲料": "feed",
+    "出口": "trade",
+    "畜群": "herd",
+    "其他": "other",
+}
+
+AUSTRALIA_DYNAMIC_PREFIX = {
+    "au": "au_mla",
+    "us": "us_mla",
+}
+
+
+def slugify_metric(value):
+    text = str(value or "").lower()
+    text = re.sub(r"[^a-z0-9]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    if text:
+        return text[:80]
+    fallback = hashlib.md5(str(value).encode("utf-8")).hexdigest()[:10]
+    return f"metric_{fallback}"
+
+
+def infer_product_id(category, metric_name):
+    metric_text = str(metric_name or "").lower()
+    if "出口" in str(metric_name):
+        return "trade"
+    if "畜群" in str(metric_name) or "herd" in metric_text:
+        return "herd"
+    if "goat" in metric_text or "山羊" in str(metric_name):
+        return "goat"
+    return AUSTRALIA_CATEGORY_PRODUCT.get(str(category or "").strip(), "other")
+
+
+def dynamic_metric_config(metric_name, rows):
+    first = rows[0] if rows else {}
+    country = (first.get("国家") or "au").strip() or "au"
+    prefix = AUSTRALIA_DYNAMIC_PREFIX.get(country, f"{country}_mla")
+    unit = (first.get("单位") or "").strip()
+    source = (first.get("来源") or "MLA Statistics").strip()
+    scope = (first.get("范围") or COUNTRY_LABELS.get(country, country)).strip()
+    note = (first.get("说明") or f"{source}：{metric_name}。").strip()
+    return {
+        "id": f"{prefix}_{slugify_metric(metric_name)}",
+        "country": country,
+        "productId": infer_product_id(first.get("品类"), metric_name),
+        "label": metric_name.replace("MLA ", "").replace("MLA", "").strip()[:64] or metric_name,
+        "unit": unit or "原始单位",
+        "frequency": (first.get("频率") or "月度").strip(),
+        "source": source,
+        "scope": scope,
+        "note": note,
+        "compare": None,
+    }
+
 
 def load_moa_parser():
     spec = importlib.util.spec_from_file_location("moa_build_workbook", MOA_BUILD_SCRIPT)
@@ -975,12 +1071,34 @@ def build_australia_metrics(australia_csv):
         reader = csv.DictReader(handle)
         for row in reader:
             metric_name = row.get("指标")
-            if metric_name in AUSTRALIA_METRIC_CONFIGS:
-                rows_by_metric[metric_name].append(row)
+            if metric_name:
+                country = (row.get("国家") or "au").strip() or "au"
+                rows_by_metric[(country, metric_name)].append(row)
 
     metrics = []
-    for metric_name, config in AUSTRALIA_METRIC_CONFIGS.items():
-        rows = rows_by_metric.get(metric_name, [])
+    configured_seen = set()
+    ordered_items = []
+    for metric_name in AUSTRALIA_METRIC_CONFIGS:
+        key = ("au", metric_name)
+        ordered_items.append(key)
+        configured_seen.add(key)
+    for key in sorted(rows_by_metric, key=lambda item: (item[0], item[1])):
+        if key not in configured_seen:
+            ordered_items.append(key)
+
+    used_ids = set()
+    for country, metric_name in ordered_items:
+        rows = rows_by_metric.get((country, metric_name), [])
+        if metric_name in AUSTRALIA_METRIC_CONFIGS and country == "au":
+            config = {**AUSTRALIA_METRIC_CONFIGS[metric_name], "country": "au"}
+        else:
+            if not rows:
+                continue
+            config = dynamic_metric_config(metric_name, rows)
+        metric_id = config["id"]
+        if metric_id in used_ids:
+            metric_id = f"{metric_id}_{slugify_metric(country)}"
+        used_ids.add(metric_id)
         series = []
         for row in sorted(rows, key=lambda item: item.get("日期", "")):
             raw_value = as_float(row.get("数值"))
@@ -1003,8 +1121,8 @@ def build_australia_metrics(australia_csv):
         series = add_change_fields(series)
         metrics.append(
             build_metric(
-                config["id"],
-                "au",
+                metric_id,
+                config.get("country", country),
                 config["productId"],
                 config["label"],
                 config["unit"],
@@ -1120,9 +1238,9 @@ def main():
     metrics = china_metrics + us_metrics + au_metrics
     metrics_by_id = {metric["id"]: metric for metric in metrics}
     comparisons = build_comparisons(metrics_by_id)
-    latest_china = max((m["latest"]["date"] for m in china_metrics if m.get("latest")), default="")
-    latest_us = max((m["latest"]["date"] for m in us_metrics if m.get("latest")), default="")
-    latest_au = max((m["latest"]["date"] for m in au_metrics if m.get("latest")), default="")
+    latest_china = max((m["latest"]["date"] for m in metrics if m.get("latest") and m.get("country") == "china"), default="")
+    latest_us = max((m["latest"]["date"] for m in metrics if m.get("latest") and m.get("country") == "us"), default="")
+    latest_au = max((m["latest"]["date"] for m in metrics if m.get("latest") and m.get("country") == "au"), default="")
     payload = {
         "meta": {
             "title": "各国农业数据监测看板",
@@ -1141,6 +1259,7 @@ def main():
                 "中国说明：中国单国看板展示农业农村部《畜产品和饲料集贸市场价格情况》文章中可解析的全部价格字段，包括全国、主产省份、主产区和主销区等原始范围。",
                 "对比规则：“各国对比”只展示同商品、同价格口径可进入比较的国家，并使用统一换算后的元/kg；不能比较的国家不会进入该品类的对比图和对比卡片。",
                 "澳洲说明：澳洲NYCI、EYCI、成交头数、屠宰量、产量、CPI和饲料报价均纳入澳洲单国视图；其中CPI、成交头数、屠宰量和产量不进入价格对比。澳洲日度/周度来源只输出完整月份；MLA成交头数使用all-dates报告点口径，默认日历窗口导出的延续行不参与月度汇总。",
+                "MLA Statistics说明：公开API和可导出PowerBI报表中的新增字段会保留原始单位、来源、范围和说明进入单国视图；saleyard/州级高频数据默认聚合到月度或全国层级，避免把细分原始明细误作可比价格。",
                 "环节差异：中国农业部多为周度集贸市场、主产省份或产销区监测价格；USDA NASS多为月度农场端Price Received；澳洲来自MLA、Australian Pork/ProFarmer和ABS CPI，环节差异需单独看口径提示。",
                 "商品差异：牛使用中国活牛、美国肉牛、澳洲NYCI做方向参考；生猪使用三国上游/胴体相关价格；奶、蛋、鸡肉当前只比较中美；豆粕只比较中国和澳洲。",
                 "标签说明：较可比=可做较强趋势和水平参考；方向参考=主要看趋势方向和异常变化；不可直接比价=只看产业链方向，不解释绝对价差。",
@@ -1162,6 +1281,7 @@ def main():
                 "frequency": "月度",
                 "latestDate": latest_us,
                 "source": "USDA NASS Quick Stats",
+                "sourceDetail": "USDA NASS Quick Stats；另含MLA Statistics API/Steiner可公开取得的美国牛价补充指标。",
                 "articleCount": None,
             },
             "au": {
@@ -1169,7 +1289,7 @@ def main():
                 "shortLabel": "MLA / ABS / APL",
                 "frequency": "月度",
                 "latestDate": latest_au,
-                "source": "MLA/NLRS、Australian Pork/ProFarmer、ABS CPI",
+                "source": "MLA/NLRS、MLA Statistics API、Australian Pork/ProFarmer、ABS CPI",
                 "articleCount": None,
             },
         },
