@@ -195,6 +195,38 @@
     gap: 10px;
     margin-bottom: 14px;
   }
+  .cards.grouped {
+    display: block;
+  }
+  .metric-group {
+    margin-bottom: 14px;
+  }
+  .metric-group:last-child {
+    margin-bottom: 0;
+  }
+  .metric-group-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 8px;
+    padding-top: 4px;
+    color: var(--text);
+  }
+  .metric-group-title {
+    font-size: 13px;
+    font-weight: 740;
+  }
+  .metric-group-count {
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .metric-group-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
   .metric-card {
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -318,7 +350,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 980px;
+    min-width: 1100px;
     background: var(--surface);
   }
   th, td {
@@ -363,14 +395,16 @@
   }
   @media (max-width: 1180px) {
     .layout { grid-template-columns: 1fr; }
-    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cards,
+    .metric-group-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .topbar { grid-template-columns: 1fr; }
     .toolbar { justify-content: flex-start; }
   }
   @media (max-width: 720px) {
     .app { width: min(100vw - 24px, 720px); padding-top: 12px; }
     .country-switch { grid-template-columns: 1fr; }
-    .cards { grid-template-columns: 1fr; }
+    .cards,
+    .metric-group-cards { grid-template-columns: 1fr; }
     .panel { padding: 12px; }
     .chart-box { height: 330px; }
     .title { font-size: 19px; }
@@ -602,6 +636,67 @@
     return metric?.latest || validSeries(metric).at(-1) || null;
   }
 
+  const metricGroupDefs = [
+    { key: "price", label: "核心价格", order: 10 },
+    { key: "retail", label: "零售/消费", order: 20 },
+    { key: "volume", label: "成交/yardings", order: 30 },
+    { key: "slaughter", label: "屠宰/产量", order: 40 },
+    { key: "trade", label: "出口/贸易", order: 50 },
+    { key: "herd", label: "畜群/存栏", order: 60 },
+    { key: "feed", label: "饲料/成本", order: 70 },
+    { key: "value", label: "估值/折算", order: 80 },
+    { key: "global", label: "国际/进口", order: 90 },
+    { key: "other", label: "其他", order: 100 },
+  ];
+  const metricGroupByKey = Object.fromEntries(metricGroupDefs.map(item => [item.key, item]));
+
+  function metricGroup(metric) {
+    const text = `${metric?.label || ""} ${metric?.source || ""} ${metric?.sourceNote || ""} ${metric?.unit || ""}`.toLowerCase();
+    const productId = metric?.productId || "";
+    let key = "other";
+    if (productId === "feed" || /barley|wheat|sorghum|soy meal|canola|cotton|饲料|豆粕|小麦|大麦|高粱|油菜粕|棉籽/.test(text)) {
+      key = "feed";
+    }
+    if (/retail|cpi|零售|消费/.test(text)) key = "retail";
+    if (/head count|yarding|yardings|saleyard|成交头数|成交|yardings/.test(text)) key = "volume";
+    if (/slaughter|production|屠宰|产量/.test(text)) key = "slaughter";
+    if (/export|出口/.test(text)) key = "trade";
+    if (/herd|flock|畜群|存栏/.test(text)) key = "herd";
+    if (/head value|头均|折算/.test(text)) key = "value";
+    if (/global|imported|import|steiner|全球|进口/.test(text)) key = "global";
+    if (key === "other" && /(price|indicator|c\/kg|a¢|元\/kg|价格|eyci|nyci|feeder|steer|pig|buyers)/.test(text)) {
+      key = "price";
+    }
+    return metricGroupByKey[key] || metricGroupByKey.other;
+  }
+
+  function groupCards(cards) {
+    const groups = new Map();
+    for (const card of cards) {
+      const group = card.group || metricGroupByKey.other;
+      if (!groups.has(group.key)) groups.set(group.key, { ...group, cards: [] });
+      groups.get(group.key).cards.push(card);
+    }
+    return Array.from(groups.values()).sort((a, b) => a.order - b.order || a.label.localeCompare(b.label, "zh-CN"));
+  }
+
+  function cardHtml(card) {
+    return `
+      <article class="metric-card ${state.mode === "compare" ? (card.id === state.product ? "selected" : "") : (card.selected ? "selected" : "")}" data-product="${card.productId || card.id}" data-metric="${card.productId ? card.id : ""}">
+        <div class="card-top">
+          <div class="card-name">${card.name}</div>
+          <div class="card-source">${card.source}</div>
+        </div>
+        <div class="value-row"><span class="value">${fmt(card.value, card.unit === "倍" ? 2 : 2)}</span><span class="unit">${card.unit}</span></div>
+        <div class="delta-row">
+          <span>${card.sub}</span>
+          ${card.mom === null || card.mom === undefined ? "" : fmtPct(card.mom)}
+          ${card.yoy === null || card.yoy === undefined ? "" : fmtPct(card.yoy).replace("变化", "同比")}
+        </div>
+      </article>
+    `;
+  }
+
   function renderShell() {
     document.getElementById("chinaDate").textContent = `中国 ${data.countries.china.latestDate || "—"}`;
     document.getElementById("usDate").textContent = `美国 ${data.countries.us.latestDate || "—"}`;
@@ -658,23 +753,28 @@
           mom: row.momPct,
           yoy: row.yoyPct,
           selected: currentMetric?.id === metric.id,
+          group: metricGroup(metric),
         });
       }
     }
-    document.getElementById("metricCards").innerHTML = cards.length ? cards.map(card => `
-      <article class="metric-card ${state.mode === "compare" ? (card.id === state.product ? "selected" : "") : (card.selected ? "selected" : "")}" data-product="${card.productId || card.id}" data-metric="${card.productId ? card.id : ""}">
-        <div class="card-top">
-          <div class="card-name">${card.name}</div>
-          <div class="card-source">${card.source}</div>
-        </div>
-        <div class="value-row"><span class="value">${fmt(card.value, card.unit === "倍" ? 2 : 2)}</span><span class="unit">${card.unit}</span></div>
-        <div class="delta-row">
-          <span>${card.sub}</span>
-          ${card.mom === null || card.mom === undefined ? "" : fmtPct(card.mom)}
-          ${card.yoy === null || card.yoy === undefined ? "" : fmtPct(card.yoy).replace("变化", "同比")}
-        </div>
-      </article>
-    `).join("") : `<div class="empty-state">当前品类暂无${modeLabel()}可展示指标</div>`;
+    const container = document.getElementById("metricCards");
+    const shouldGroup = state.mode !== "compare" && (state.mode === "au" || cards.length > 6) && cards.length > 1;
+    container.classList.toggle("grouped", shouldGroup);
+    if (!cards.length) {
+      container.innerHTML = `<div class="empty-state">当前品类暂无${modeLabel()}可展示指标</div>`;
+    } else if (shouldGroup) {
+      container.innerHTML = groupCards(cards).map(group => `
+        <section class="metric-group">
+          <div class="metric-group-head">
+            <div class="metric-group-title">${group.label}</div>
+            <div class="metric-group-count">${group.cards.length} 个指标</div>
+          </div>
+          <div class="metric-group-cards">${group.cards.map(cardHtml).join("")}</div>
+        </section>
+      `).join("");
+    } else {
+      container.innerHTML = cards.map(cardHtml).join("");
+    }
     document.querySelectorAll(".metric-card").forEach(card => {
       card.addEventListener("click", () => {
         state.product = card.dataset.product;
@@ -828,15 +928,24 @@
     } else {
       document.getElementById("tableTitle").textContent = `${modeLabel()}指标明细`;
       document.getElementById("tableHead").innerHTML = `
-        <tr><th>国家</th><th>品类</th><th>指标</th><th>最新值</th><th>环比</th><th>同比</th><th>日期</th><th>来源</th></tr>
+        <tr><th>国家</th><th>品类</th><th>分类</th><th>指标</th><th>最新值</th><th>环比</th><th>同比</th><th>日期</th><th>来源</th></tr>
       `;
-      const rows = data.metrics.filter(metric => metric.country === state.mode && latest(metric));
+      const rows = data.metrics
+        .filter(metric => metric.country === state.mode && latest(metric))
+        .sort((a, b) => {
+          const productCompare = (productsById[a.productId]?.label || a.productId).localeCompare(productsById[b.productId]?.label || b.productId, "zh-CN");
+          if (productCompare) return productCompare;
+          const groupCompare = metricGroup(a).order - metricGroup(b).order;
+          if (groupCompare) return groupCompare;
+          return a.label.localeCompare(b.label, "zh-CN");
+        });
       document.getElementById("tableBody").innerHTML = rows.map(metric => {
         const row = latest(metric);
         return `
           <tr data-product="${metric.productId}" data-metric="${metric.id}">
             <td><span class="tag ${state.mode}">${modeLabel()}</span></td>
             <td>${productsById[metric.productId]?.label || metric.productId}</td>
+            <td>${metricGroup(metric).label}</td>
             <td>${metric.label}</td>
             <td>${fmt(row.value, 2)} ${metric.unit}</td>
             <td>${row.momPct === null || row.momPct === undefined ? "—" : `${fmt(row.momPct, 1)}%`}</td>
