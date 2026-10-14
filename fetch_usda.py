@@ -22,6 +22,8 @@ from openpyxl import Workbook
 from openpyxl.chart import LineChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 KEY = os.environ.get("NASS_API_KEY")
@@ -149,17 +151,54 @@ def fetch(commodity: str) -> pd.DataFrame:
         "agg_level_desc": "NATIONAL",
         "format": "CSV",
     }
-    r = requests.get(BASE, params=params, timeout=180)
+    retry = Retry(
+        total=4,
+        connect=4,
+        read=3,
+        status=3,
+        backoff_factor=1.5,
+        backoff_max=15,
+        status_forcelist=(408, 425, 429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+        raise_on_status=False,
+    )
+    client = requests.Session()
+    client.mount("https://", HTTPAdapter(max_retries=retry))
+    r = client.get(BASE, params=params, timeout=(30, 180))
     if r.status_code != 200:
         raise RuntimeError(f"{commodity} 请求失败 HTTP {r.status_code}: {r.text[:300]}")
-    return pd.read_csv(io.StringIO(r.text), low_memory=False)
+    raw = pd.read_csv(io.StringIO(r.text), low_memory=False)
+    validate_raw(raw, commodity)
+    return raw
+
+
+def validate_raw(raw: pd.DataFrame, commodity: str) -> None:
+    required = {"freq_desc", "unit_desc", "agg_level_desc", "short_desc", "Value", "year", "begin_code"}
+    missing = sorted(required.difference(raw.columns))
+    if raw.empty or missing:
+        detail = "返回 0 行" if raw.empty else f"缺少字段: {', '.join(missing)}"
+        raise RuntimeError(f"{commodity} USDA 返回内容无效（{detail}）")
 
 
 def fetch_or_load(name: str, cfg: dict) -> pd.DataFrame:
     raw_path = f"{OUT_RAW}/{name}_price.csv"
     if os.environ.get("USE_EXISTING_RAW") == "1" and os.path.exists(raw_path):
-        return pd.read_csv(raw_path, low_memory=False)
-    raw = fetch(cfg["commodity"])
+        raw = pd.read_csv(raw_path, low_memory=False)
+        validate_raw(raw, cfg["commodity"])
+        return raw
+    try:
+        raw = fetch(cfg["commodity"])
+    except Exception as exc:
+        if not os.path.exists(raw_path):
+            raise
+        cached = pd.read_csv(raw_path, low_memory=False)
+        validate_raw(cached, cfg["commodity"])
+        print(
+            f"::warning title=USDA {cfg['commodity']} 使用历史真实数据::"
+            f"实时抓取失败（{type(exc).__name__}），保留 {raw_path}，本次不写入估算值。",
+            file=sys.stderr,
+        )
+        return cached
     raw.to_csv(raw_path, index=False)
     return raw
 

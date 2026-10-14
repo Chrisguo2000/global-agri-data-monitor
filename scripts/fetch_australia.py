@@ -349,10 +349,40 @@ def cpi_table_has_food_indexes(path):
 
 
 def download_pork_reports(client, raw_dir, max_pdfs):
-    page_html = request_text(client, PORK_REPORTS_URL)
+    manifest_path = raw_dir / "australian_pork_pdf_manifest.json"
+    try:
+        page_html = request_text(client, PORK_REPORTS_URL)
+    except requests.RequestException as exc:
+        manifest = {
+            "source": PORK_REPORTS_URL,
+            "status": "source_unavailable",
+            "links": [],
+            "downloaded": [],
+            "failed": [{"url": PORK_REPORTS_URL, "error": str(exc)}],
+        }
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(
+            "::warning title=Australian Pork 使用历史真实数据::"
+            f"实时页面不可用（{type(exc).__name__}），本次不更新猪价和饲料报价，合并时保留 baseline。",
+            file=sys.stderr,
+        )
+        return []
     links = pdf_links(page_html, PORK_REPORTS_URL)
     if not links:
-        raise RuntimeError("Australian Pork Eyes and Ears page has no PDF links")
+        manifest = {
+            "source": PORK_REPORTS_URL,
+            "status": "no_pdf_links",
+            "links": [],
+            "downloaded": [],
+            "failed": [],
+        }
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(
+            "::warning title=Australian Pork 使用历史真实数据::"
+            "实时页面没有可识别的 PDF 链接，本次不更新猪价和饲料报价，合并时保留 baseline。",
+            file=sys.stderr,
+        )
+        return []
     selected = links if max_pdfs <= 0 else links[-max_pdfs:]
     out_dir = raw_dir / "pork_pdfs"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -368,13 +398,24 @@ def download_pork_reports(client, raw_dir, max_pdfs):
         except Exception as exc:
             failed.append({"url": url, "error": str(exc)})
             print(f"[PORK FAIL] {url}: {exc}", file=sys.stderr)
-    manifest = {"source": PORK_REPORTS_URL, "links": links, "downloaded": downloaded, "failed": failed}
-    (raw_dir / "australian_pork_pdf_manifest.json").write_text(
+    manifest = {
+        "source": PORK_REPORTS_URL,
+        "status": "ok" if downloaded else "downloads_failed",
+        "links": links,
+        "downloaded": downloaded,
+        "failed": failed,
+    }
+    manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     if not downloaded:
-        raise RuntimeError("No Australian Pork PDFs downloaded")
+        print(
+            "::warning title=Australian Pork 使用历史真实数据::"
+            "本次 PDF 均下载失败，不更新猪价和饲料报价，合并时保留 baseline。",
+            file=sys.stderr,
+        )
+        return []
     return [Path(item) for item in downloaded]
 
 

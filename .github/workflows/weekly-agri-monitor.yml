@@ -4,7 +4,18 @@ on:
   schedule:
     # 每周一 00:00 UTC = 北京时间周一 08:00
     - cron: "0 0 * * 1"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      commit_data:
+        description: "是否提交本次更新的数据到 main"
+        required: true
+        default: true
+        type: boolean
+      send_email:
+        description: "是否发送周报邮件"
+        required: true
+        default: true
+        type: boolean
 
 concurrency:
   group: weekly-agri-monitor
@@ -66,7 +77,11 @@ jobs:
         run: python fetch_usda.py
 
       - name: 抓取农业农村部最新文章
-        run: node scripts/scrape_moa_jcyj.mjs --out-dir=dist/moa --pages=1
+        run: |
+          node scripts/scrape_moa_jcyj.mjs \
+            --out-dir=dist/moa \
+            --pages=1 \
+            --fallback-json=data/moa/baseline_moa_jcyj_data.json
 
       - name: 合并农业农村部历史基线
         run: |
@@ -137,6 +152,7 @@ jobs:
             --zip-name 各国农业数据监测看板.zip
 
       - name: 提交更新的数据
+        if: github.event_name != 'workflow_dispatch' || inputs.commit_data
         run: |
           cp dist/moa/moa_jcyj_data_merged.json data/moa/baseline_moa_jcyj_data.json
           git config user.name  "github-actions[bot]"
@@ -152,6 +168,7 @@ jobs:
           fi
 
       - name: 检查邮件配置
+        if: github.event_name != 'workflow_dispatch' || inputs.send_email
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
@@ -168,6 +185,7 @@ jobs:
           exit "$missing"
 
       - name: 发送邮件
+        if: github.event_name != 'workflow_dispatch' || inputs.send_email
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

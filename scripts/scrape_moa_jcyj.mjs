@@ -9,11 +9,22 @@ const OUT_DIR = path.resolve(outDirArg || process.env.OUT_DIR || "dist");
 const RAW_DIR = path.join(OUT_DIR, "raw_html");
 const DATA_JSON = path.join(OUT_DIR, "moa_jcyj_data.json");
 const execFileAsync = promisify(execFile);
+const fallbackArg = process.argv.find((arg) => arg.startsWith("--fallback-json="))?.split("=").slice(1).join("=");
+const FALLBACK_JSON = fallbackArg ? path.resolve(fallbackArg) : null;
 
 const pagesArg = process.argv.find((arg) => arg.startsWith("--pages="))?.split("=").slice(1).join("=");
 const PAGES_TO_FETCH = pagesArg || process.env.PAGES_TO_FETCH || "1";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+class SourceFetchError extends Error {
+  constructor(url, cause) {
+    super(`Fetch failed for ${url}: ${cause?.message || cause}`);
+    this.name = "SourceFetchError";
+    this.url = url;
+    this.cause = cause;
+  }
+}
 
 function decodeHtml(input = "") {
   return input
@@ -72,13 +83,21 @@ async function fetchText(url, tries = 3) {
         "-sS",
         "--fail",
         "--retry",
-        "2",
+        "4",
+        "--retry-all-errors",
+        "--retry-delay",
+        String(attempt),
         "--connect-timeout",
         "15",
         "--max-time",
         "45",
+        "--compressed",
         "-A",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154 Safari/537.36",
+        "-H",
+        "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "-H",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
         url,
       ], { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
       return stdout;
@@ -87,7 +106,42 @@ async function fetchText(url, tries = 3) {
       await sleep(400 * attempt);
     }
   }
-  throw new Error(`Fetch failed for ${url}: ${lastError?.message || lastError}`);
+  throw new SourceFetchError(url, lastError);
+}
+
+async function writeFallbackLatest(error) {
+  if (!FALLBACK_JSON) return false;
+  try {
+    const baseline = JSON.parse(await fs.readFile(FALLBACK_JSON, "utf8"));
+    if (!Array.isArray(baseline.articles) || baseline.articles.length === 0) {
+      throw new Error(`MOA fallback baseline has no articles: ${FALLBACK_JSON}`);
+    }
+    const data = {
+      generatedAt: new Date().toISOString(),
+      source: BASE,
+      countPage: baseline.countPage || null,
+      requestedPages: 0,
+      listPages: [],
+      articleCount: 0,
+      articles: [],
+      marketMetrics: [],
+      slaughterMetrics: [],
+      fetchStatus: "source_unavailable",
+      fetchError: `${error.name}: ${error.message}`,
+      extractionNotes: [
+        "农业农村部本次实时抓取不可用，未填充或估算新数据。",
+        `后续合并步骤将保留历史基线 ${FALLBACK_JSON} 中已经核验的真实数据。`,
+      ],
+    };
+    await fs.writeFile(DATA_JSON, JSON.stringify(data, null, 2), "utf8");
+    console.warn(
+      `::warning title=农业农村部使用历史真实数据::实时来源不可用，已生成空的增量文件并保留历史基线；原因：${error.message}`,
+    );
+    return true;
+  } catch (fallbackError) {
+    console.error(`Unable to write MOA fallback data: ${fallbackError.message || fallbackError}`);
+    return false;
+  }
 }
 
 function extractCountPage(html) {
@@ -377,7 +431,8 @@ async function main() {
   }, null, 2));
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
+  if (error instanceof SourceFetchError && await writeFallbackLatest(error)) return;
   console.error(error);
   process.exit(1);
 });
