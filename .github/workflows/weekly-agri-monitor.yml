@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: 拉取仓库
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 同步最新 main
         run: |
@@ -39,9 +39,10 @@ jobs:
           git checkout -B main origin/main
 
       - name: 安装 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
+          package-manager-cache: false
 
       - name: 安装 Playwright 并检测 Chrome
         run: |
@@ -63,7 +64,7 @@ jobs:
           fi
 
       - name: 安装 Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -201,7 +202,7 @@ jobs:
 
       - name: 上传运行产物
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: weekly-agri-monitor-output
           path: |
